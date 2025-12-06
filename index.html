@@ -8,72 +8,96 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        /* Estilo Header tipo Excel */
         .excel-header { background-color: #107c41; color: white; padding: 15px; border-bottom: 4px solid #0b5c2f; }
         .table-container { background: white; border: 1px solid #dee2e6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        th { background-color: #f2f2f2 !important; font-size: 0.9rem; text-transform: uppercase; }
+        
+        /* Tabla Ajustada */
+        th { background-color: #f2f2f2 !important; font-size: 0.85rem; text-transform: uppercase; vertical-align: middle; }
         td { font-size: 0.9rem; vertical-align: middle; }
+        
+        /* Navegación */
         .month-nav { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 20px 0; }
         .nav-btn { background: #107c41; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; }
-        .week-tabs { display: flex; gap: 5px; margin-bottom: 15px; justify-content: center; }
+        .nav-btn:hover { background: #0b5c2f; }
+        
+        /* Pestañas Semanas */
+        .week-tabs { display: flex; gap: 5px; margin-bottom: 15px; justify-content: center; flex-wrap: wrap; }
         .week-tab { padding: 5px 15px; border: 1px solid #ddd; background: white; cursor: pointer; border-radius: 20px; font-size: 0.85rem; }
         .week-tab.active { background: #107c41; color: white; border-color: #107c41; }
-        .card-chart { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        /* Gráficos */
+        .card-chart { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; height: 250px; }
+        
+        /* Loading overlay */
+        #loadingOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 9999; display: none;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
     </style>
 </head>
 <body>
 
-    <div class="excel-header container-fluid d-flex justify-content-between align-items-center">
+    <div id="loadingOverlay">
+        <div class="spinner-border text-success" role="status"></div>
+        <div class="mt-2 fw-bold text-success">Procesando...</div>
+    </div>
+
+    <div class="excel-header container-fluid d-flex justify-content-between align-items-center sticky-top">
         <div>
-            <h4 class="m-0">Registro de Reservas Chromebook 2026</h4>
-            <small>Integrado con Google Workspace</small>
+            <h4 class="m-0 fw-bold">📅 Gestión Chromebooks 2026</h4>
+            <small class="opacity-75">Panel de Control Docente</small>
         </div>
-        <button class="btn btn-light btn-sm" onclick="openModal()">+ Nueva Reserva</button>
+        <div>
+            <button class="btn btn-light btn-sm fw-bold shadow-sm" onclick="loadData()">🔄 Actualizar</button>
+            <button class="btn btn-warning btn-sm fw-bold shadow-sm ms-2" onclick="openModal()">+ Nueva Reserva</button>
+        </div>
     </div>
 
     <div class="container-fluid mt-3">
         <div class="month-nav">
             <button class="nav-btn" onclick="changeMonth(-1)">&#9664;</button>
-            <h3 id="currentMonthLabel" class="m-0 fw-bold">Marzo 2026</h3>
+            <h3 id="currentMonthLabel" class="m-0 fw-bold text-dark">Marzo 2026</h3>
             <button class="nav-btn" onclick="changeMonth(1)">&#9654;</button>
         </div>
 
-        <div class="week-tabs" id="weekTabs">
-            </div>
+        <div class="week-tabs" id="weekTabs"></div>
 
         <div class="row mb-3 g-2">
             <div class="col-md-3">
                 <select id="filterCurso" class="form-select form-select-sm" onchange="renderApp()">
                     <option value="">Todos los Cursos</option>
-                    <option value="1A">1° Medio A</option>
-                    <option value="2A">2° Medio A</option>
-                    <option value="3A">3° Medio A</option>
-                    <option value="4A">4° Medio A</option>
+                    <option value="1">1° Medio</option>
+                    <option value="2">2° Medio</option>
+                    <option value="3">3° Medio</option>
+                    <option value="4">4° Medio</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <input type="text" id="filterProfesor" class="form-control form-control-sm" placeholder="Filtrar por Profesor..." onkeyup="renderApp()">
+                <input type="text" id="filterProfesor" class="form-control form-control-sm" placeholder="🔍 Buscar Profesor..." onkeyup="renderApp()">
             </div>
             <div class="col-md-6 text-end">
-                <span class="badge bg-secondary" id="totalCount">0 Reservas</span>
+                <span class="badge bg-secondary fs-6" id="totalCount">Cargando datos...</span>
             </div>
         </div>
 
         <div class="row">
-            <div class="col-lg-8">
-                <div class="table-container p-0 table-responsive">
-                    <table class="table table-bordered table-hover m-0" id="mainTable">
-                        <thead>
+            <div class="col-lg-8 mb-4">
+                <div class="table-container p-0 table-responsive" style="max-height: 800px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover m-0 table-sm text-center" id="mainTable">
+                        <thead class="table-light sticky-top" style="top: 0; z-index: 1;">
                             <tr>
                                 <th>Fecha</th>
                                 <th>Hora</th>
                                 <th>Curso</th>
                                 <th>Asignatura</th>
                                 <th>Profesor</th>
-                                <th>Chrome.</th>
-                                <th>Reempl.</th>
-                                <th>Dev.</th>
-                                <th>Obs.</th>
-                                <th>Acción</th>
+                                <th title="Solicitados">Chr.</th>
+                                <th title="Reemplazo">Ree.</th>
+                                <th title="Devueltos">Dev.</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
@@ -84,96 +108,240 @@
 
             <div class="col-lg-4">
                 <div class="card-chart">
-                    <h6>Asignaturas (Mes Actual)</h6>
-                    <canvas id="chartAsignatura"></canvas>
+                    <h6 class="fw-bold text-secondary border-bottom pb-2">Asignaturas (Mes Actual)</h6>
+                    <div style="height: 180px;"><canvas id="chartAsignatura"></canvas></div>
                 </div>
                 <div class="card-chart">
-                    <h6>Observaciones</h6>
-                    <canvas id="chartObservaciones"></canvas>
+                    <h6 class="fw-bold text-secondary border-bottom pb-2">Reporte de Fallas</h6>
+                    <div style="height: 180px;"><canvas id="chartObservaciones"></canvas></div>
                 </div>
                  <div class="card-chart">
-                    <h6>Equipos: Solicitados vs Reemplazo</h6>
-                    <canvas id="chartEquipos"></canvas>
+                    <h6 class="fw-bold text-secondary border-bottom pb-2">Uso de Equipos</h6>
+                    <div style="height: 180px;"><canvas id="chartEquipos"></canvas></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="reservationModal" tabindex="-1">
+    <div class="modal fade" id="reservationModal" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
                     <h5 class="modal-title">Nueva Reserva</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="resForm">
+                        <input type="hidden" id="fId">
+
                         <div class="row g-2">
-                            <div class="col-6"><label>Fecha</label><input type="date" id="fFecha" class="form-control" required min="2026-03-01" max="2026-12-31"></div>
                             <div class="col-6">
-                                <label>Hora</label>
-                                <select id="fHora" class="form-select">
-                                    <option>08:10</option><option>10:00</option><option>11:30</option><option>13:00</option><option>14:30</option>
+                                <label class="form-label small fw-bold">Fecha</label>
+                                <input type="date" id="fFecha" class="form-control form-control-sm" required min="2026-03-01" max="2026-12-31">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Hora Bloque</label>
+                                <select id="fHora" class="form-select form-select-sm">
+                                    <option>08:10</option>
+                                    <option>10:00</option>
+                                    <option>11:30</option>
+                                    <option>13:00</option>
+                                    <option>14:30</option>
+                                    <option>16:00</option>
                                 </select>
                             </div>
-                            <div class="col-6"><label>Curso</label><input type="text" id="fCurso" class="form-control"></div>
-                            <div class="col-6"><label>Asignatura</label><input type="text" id="fAsignatura" class="form-control"></div>
-                            <div class="col-12"><label>Profesor</label><input type="text" id="fProfesor" class="form-control"></div>
-                            <div class="col-4"><label>Chrome.</label><input type="number" id="fChrome" class="form-control" value="0"></div>
-                            <div class="col-4"><label>Reempl.</label><input type="number" id="fReemp" class="form-control" value="0"></div>
-                            <div class="col-4"><label>Devueltos</label><input type="number" id="fDev" class="form-control" value="0"></div>
-                            <div class="col-12"><label>Observación</label>
-                                <select id="fObs" class="form-select">
-                                    <option value="Sin novedad">Sin novedad</option>
-                                    <option value="Pantalla Dañada">Pantalla Dañada</option>
-                                    <option value="Teclado Falla">Teclado Falla</option>
-                                    <option value="No Enciende">No Enciende</option>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Curso</label>
+                                <input type="text" id="fCurso" class="form-control form-control-sm" placeholder="Ej: 2° Medio A">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Asignatura</label>
+                                <input type="text" id="fAsignatura" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Profesor/a</label>
+                                <input type="text" id="fProfesor" class="form-control form-control-sm">
+                            </div>
+                            
+                            <hr class="my-2">
+                            
+                            <div class="col-4">
+                                <label class="form-label small fw-bold text-primary">Chrome.</label>
+                                <input type="number" id="fChrome" class="form-control form-control-sm" value="0">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-bold text-danger">Reempl.</label>
+                                <input type="number" id="fReemp" class="form-control form-control-sm" value="0">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-bold text-success">Devueltos</label>
+                                <input type="number" id="fDev" class="form-control form-control-sm" value="0">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Observación Técnica</label>
+                                <select id="fObs" class="form-select form-select-sm">
+                                    <option value="Sin novedad">✅ Sin novedad</option>
+                                    <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
+                                    <option value="Teclado Falla">🟠 Teclado Falla</option>
+                                    <option value="No Enciende">⚫ No Enciende</option>
+                                    <option value="Cargador Malo">🔌 Cargador Malo</option>
                                 </select>
                             </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-success" onclick="saveReservation()">Guardar</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success btn-sm px-4" onclick="saveReservation()">Guardar Reserva</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // --- CONFIGURACIÓN ---
-        // PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxx6i_I8LVaj9iTsUhsRgkX5JOpaIpyavXpJFGoz-CjeC7_JQSMEMLrizei5DJhI3w/exec"; 
+        // ==========================================================
+        // CONFIGURACIÓN IMPORTANTE
+        // ==========================================================
         
-        // --- DATOS SIMULADOS (Para que funcione al copiar y pegar) ---
-        // En producción, esto vendría de Google Sheets
-        let dbData = [
-            { id:1, fecha: '2026-03-05', hora: '08:10', curso: '1A', asignatura: 'Matemática', profesor: 'Juan Perez', chromebooks: 30, reemplazo: 2, devueltos: 32, observacion: 'Sin novedad' },
-            { id:2, fecha: '2026-03-05', hora: '10:00', curso: '2A', asignatura: 'Lenguaje', profesor: 'Ana Silva', chromebooks: 25, reemplazo: 0, devueltos: 25, observacion: 'Sin novedad' },
-            { id:3, fecha: '2026-03-12', hora: '08:10', curso: '3A', asignatura: 'Historia', profesor: 'Pedro Diaz', chromebooks: 28, reemplazo: 5, devueltos: 33, observacion: 'Pantalla Dañada' },
-            { id:4, fecha: '2026-04-02', hora: '11:30', curso: '4A', asignatura: 'Ciencias', profesor: 'Maria Paz', chromebooks: 15, reemplazo: 0, devueltos: 15, observacion: 'Sin novedad' },
-             { id:5, fecha: '2026-03-25', hora: '10:00', curso: '2B', asignatura: 'Tecnología', profesor: 'Luis G.', chromebooks: 40, reemplazo: 1, devueltos: 41, observacion: 'Teclado Falla' }
-        ];
+        // PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE (Version "exec")
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxx6i_I8LVaj9iTsUhsRgkX5JOpaIpyavXpJFGoz-CjeC7_JQSMEMLrizei5DJhI3w/exec"; 
 
-        // --- ESTADO DE LA APP ---
+        // ==========================================================
+        
+        // Variables de Estado
+        let dbData = [];
         const months = ["Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         let currentMonthIndex = 0; // 0 = Marzo
-        let currentWeek = 0; // 0 = Todas, 1-4 Semanas
+        let currentWeek = 0; 
         let year = 2026;
 
-        // --- INICIALIZACIÓN ---
+        // --- INICIO ---
         document.addEventListener('DOMContentLoaded', () => {
             renderWeeks();
-            renderApp();
+            loadData();
         });
 
-        // --- LÓGICA DE TIEMPO ---
+        // --- FUNCIONES DE CARGA (CRUD: READ) ---
+        function loadData() {
+            showLoading(true);
+            fetch(SCRIPT_URL)
+                .then(response => response.json())
+                .then(data => {
+                    dbData = data;
+                    renderApp();
+                    showLoading(false);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert("Error cargando datos. Verifica tu conexión.");
+                    showLoading(false);
+                });
+        }
+
+        // --- FUNCIONES DE GUARDADO (CRUD: CREATE / UPDATE) ---
+        function saveReservation() {
+            const id = document.getElementById('fId').value;
+            
+            // Validaciones básicas
+            if(!document.getElementById('fFecha').value) return alert("Selecciona una fecha");
+            if(!document.getElementById('fProfesor').value) return alert("Indica el profesor");
+
+            showLoading(true);
+
+            const payload = {
+                action: id ? "update" : "create",
+                id: id,
+                fecha: document.getElementById('fFecha').value,
+                hora: document.getElementById('fHora').value,
+                curso: document.getElementById('fCurso').value,
+                asignatura: document.getElementById('fAsignatura').value,
+                profesor: document.getElementById('fProfesor').value,
+                chromebooks: document.getElementById('fChrome').value,
+                reemplazo: document.getElementById('fReemp').value,
+                devueltos: document.getElementById('fDev').value,
+                observacion: document.getElementById('fObs').value
+            };
+
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(response => {
+                alert(response.message);
+                const modalEl = document.getElementById('reservationModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                loadData(); // Recargar datos frescos
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error de conexión. Intenta de nuevo.");
+                showLoading(false);
+            });
+        }
+
+        // --- FUNCIONES DE BORRADO (CRUD: DELETE) ---
+        function deleteItem(id) {
+            if(!confirm("¿Está seguro de ELIMINAR este registro permanentemente?")) return;
+            
+            showLoading(true);
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: "delete", id: id })
+            })
+            .then(res => res.json())
+            .then(response => {
+                alert(response.message);
+                loadData();
+            })
+            .catch(err => {
+                alert("Error al eliminar.");
+                showLoading(false);
+            });
+        }
+
+        // --- GESTIÓN DE MODALES ---
+        const modalElement = document.getElementById('reservationModal');
+        const myModal = new bootstrap.Modal(modalElement);
+
+        function openModal() {
+            document.getElementById('resForm').reset();
+            document.getElementById('fId').value = ""; // Limpiar ID para modo "Crear"
+            document.querySelector('.modal-title').innerText = "Nueva Reserva";
+            document.querySelector('.modal-header').classList.remove('bg-warning');
+            document.querySelector('.modal-header').classList.add('bg-success');
+            myModal.show();
+        }
+
+        function editItem(id) {
+            const item = dbData.find(d => d.id.toString() === id.toString());
+            if (!item) return;
+
+            document.getElementById('fId').value = item.id;
+            document.getElementById('fFecha').value = item.fecha;
+            document.getElementById('fHora').value = item.hora;
+            document.getElementById('fCurso').value = item.curso;
+            document.getElementById('fAsignatura').value = item.asignatura;
+            document.getElementById('fProfesor').value = item.profesor;
+            document.getElementById('fChrome').value = item.chromebooks;
+            document.getElementById('fReemp').value = item.reemplazo;
+            document.getElementById('fDev').value = item.devueltos;
+            document.getElementById('fObs').value = item.observacion;
+
+            document.querySelector('.modal-title').innerText = "Editar Reserva";
+            document.querySelector('.modal-header').classList.remove('bg-success');
+            document.querySelector('.modal-header').classList.add('bg-warning');
+            myModal.show();
+        }
+
+        // --- LÓGICA DE VISUALIZACIÓN ---
         function changeMonth(step) {
             let newIndex = currentMonthIndex + step;
             if (newIndex >= 0 && newIndex < months.length) {
                 currentMonthIndex = newIndex;
-                currentWeek = 0; // Resetear semana al cambiar mes
+                currentWeek = 0;
                 renderWeeks();
                 renderApp();
             }
@@ -187,7 +355,7 @@
 
         function renderWeeks() {
             const container = document.getElementById('weekTabs');
-            let html = `<div class="week-tab ${currentWeek === 0 ? 'active' : ''}" onclick="setWeek(0)">Todo el Mes</div>`;
+            let html = `<div class="week-tab ${currentWeek === 0 ? 'active' : ''}" onclick="setWeek(0)">Mes Completo</div>`;
             for(let i=1; i<=4; i++) {
                 html += `<div class="week-tab ${currentWeek === i ? 'active' : ''}" onclick="setWeek(${i})">Semana ${i}</div>`;
             }
@@ -196,80 +364,89 @@
         }
 
         function getWeekNumber(dateString) {
-            const date = new Date(dateString);
-            const day = date.getDate();
-            // Lógica simple: dividir mes en 4 bloques de 7-8 días
+            const parts = dateString.split('-'); 
+            const day = parseInt(parts[2]);
             if (day <= 7) return 1;
             if (day <= 14) return 2;
             if (day <= 21) return 3;
             return 4;
         }
 
-        // --- RENDERIZADO PRINCIPAL ---
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
         function renderApp() {
-            // 1. Filtrar Datos
-            const selectedMonthNum = currentMonthIndex + 3; // Marzo es mes 3
+            const selectedMonthNum = currentMonthIndex + 3; // Marzo es 3
             const filterC = document.getElementById('filterCurso').value.toLowerCase();
             const filterP = document.getElementById('filterProfesor').value.toLowerCase();
 
             let filtered = dbData.filter(item => {
-                const date = new Date(item.fecha);
-                const itemMonth = date.getMonth() + 1; // JS meses son 0-11
-                const itemYear = date.getFullYear();
+                const parts = item.fecha.split('-');
+                const itemYear = parseInt(parts[0]);
+                const itemMonth = parseInt(parts[1]);
                 
-                // Filtro Fecha (Mes y Año)
                 if (itemYear !== year || itemMonth !== selectedMonthNum) return false;
-
-                // Filtro Semana
                 if (currentWeek !== 0 && getWeekNumber(item.fecha) !== currentWeek) return false;
-
-                // Filtros Texto
                 if (filterC && !item.curso.toLowerCase().includes(filterC)) return false;
                 if (filterP && !item.profesor.toLowerCase().includes(filterP)) return false;
-
                 return true;
             });
 
-            // 2. Ordenar por Hora (Más temprano primero)
-            filtered.sort((a, b) => a.hora.localeCompare(b.hora));
+            // Ordenar por Fecha y luego por Hora
+            filtered.sort((a, b) => {
+                if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+                return a.hora.localeCompare(b.hora);
+            });
 
-            // 3. Pintar Tabla
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-muted p-4">No hay reservas en este período</td></tr>';
+            }
+
             filtered.forEach(row => {
                 tbody.innerHTML += `
                     <tr>
-                        <td>${row.fecha}</td>
+                        <td>${formatDateCL(row.fecha)}</td>
                         <td><strong>${row.hora}</strong></td>
                         <td>${row.curso}</td>
-                        <td>${row.asignatura}</td>
-                        <td>${row.profesor}</td>
+                        <td class="text-start">${row.asignatura}</td>
+                        <td class="text-start">${row.profesor}</td>
                         <td>${row.chromebooks}</td>
-                        <td>${row.reemplazo}</td>
+                        <td class="${row.reemplazo > 0 ? 'text-danger fw-bold' : ''}">${row.reemplazo}</td>
                         <td>${row.devueltos}</td>
-                        <td style="color:${getColorForObs(row.observacion)}">${row.observacion}</td>
-                        <td><button class="btn btn-danger btn-sm" onclick="alert('Funcionalidad de borrar')">X</button></td>
+                        <td style="color:${getColorForObs(row.observacion)}; font-weight:500; font-size:0.8rem;">${row.observacion}</td>
+                        <td>
+                            <button class="btn btn-outline-warning btn-sm py-0 px-1" onclick="editItem('${row.id}')" title="Editar">✏️</button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteItem('${row.id}')" title="Borrar">🗑️</button>
+                        </td>
                     </tr>
                 `;
             });
 
-            document.getElementById('totalCount').innerText = `${filtered.length} Reservas`;
-
-            // 4. Actualizar Gráficos
+            document.getElementById('totalCount').innerText = `${filtered.length} Registros`;
             updateCharts(filtered);
         }
 
-        function getColorForObs(obs) {
-            if(obs.includes('Dañada')) return 'red';
-            if(obs.includes('Falla')) return 'orange';
-            return 'green';
+        function formatDateCL(dateStr) {
+            // Convierte YYYY-MM-DD a DD/MM
+            const p = dateStr.split('-');
+            return `${p[2]}/${p[1]}`;
         }
 
-        // --- GRÁFICOS (Chart.js) ---
+        function getColorForObs(obs) {
+            if(!obs) return 'black';
+            if(obs.includes('Dañada') || obs.includes('No Enciende')) return '#dc3545'; // Rojo
+            if(obs.includes('Falla') || obs.includes('Malo')) return '#fd7e14'; // Naranja
+            return '#198754'; // Verde
+        }
+
+        // --- GRÁFICOS ---
         let chartAsig, chartObs, chartEq;
 
         function updateCharts(data) {
-            // Procesar datos para gráficos
             const asignaturas = {};
             const observaciones = {};
             let totalChrome = 0, totalReemp = 0;
@@ -277,38 +454,49 @@
             data.forEach(d => {
                 asignaturas[d.asignatura] = (asignaturas[d.asignatura] || 0) + 1;
                 observaciones[d.observacion] = (observaciones[d.observacion] || 0) + 1;
-                totalChrome += parseInt(d.chromebooks);
-                totalReemp += parseInt(d.reemplazo);
+                totalChrome += parseInt(d.chromebooks || 0);
+                totalReemp += parseInt(d.reemplazo || 0);
             });
 
-            // Configurar Chart Asignatura
+            // 1. Asignaturas (Barras Verticales)
             const ctxA = document.getElementById('chartAsignatura');
             if(chartAsig) chartAsig.destroy();
             chartAsig = new Chart(ctxA, {
                 type: 'bar',
                 data: {
                     labels: Object.keys(asignaturas),
-                    datasets: [{ label: 'Reservas', data: Object.values(asignaturas), backgroundColor: '#107c41' }]
-                }
+                    datasets: [{ 
+                        label: 'Reservas', 
+                        data: Object.values(asignaturas), 
+                        backgroundColor: '#107c41',
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
             });
 
-            // Configurar Chart Observaciones (Barra con colores distintos)
+            // 2. Observaciones (Barras de Colores)
             const ctxO = document.getElementById('chartObservaciones');
             if(chartObs) chartObs.destroy();
-            const obsColors = Object.keys(observaciones).map(k => getColorForObs(k));
+            const obsLabels = Object.keys(observaciones);
+            const obsData = Object.values(observaciones);
+            const obsColors = obsLabels.map(k => getColorForObs(k));
+
             chartObs = new Chart(ctxO, {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(observaciones),
+                    labels: obsLabels,
                     datasets: [{ 
-                        label: 'Casos', 
-                        data: Object.values(observaciones), 
-                        backgroundColor: obsColors 
+                        label: 'Cantidad', 
+                        data: obsData, 
+                        backgroundColor: obsColors,
+                        borderRadius: 4
                     }]
-                }
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
             });
 
-            // Configurar Chart Equipos (Diferenciar Chromebook vs Reemplazo)
+            // 3. Equipos (Comparativa)
             const ctxE = document.getElementById('chartEquipos');
             if(chartEq) chartEq.destroy();
             chartEq = new Chart(ctxE, {
@@ -316,42 +504,16 @@
                 data: {
                     labels: ['Equipos'],
                     datasets: [
-                        { label: 'Solicitados', data: [totalChrome], backgroundColor: '#0d6efd' },
-                        { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545' }
+                        { label: 'Solicitados', data: [totalChrome], backgroundColor: '#0d6efd', barPercentage: 0.5 },
+                        { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545', barPercentage: 0.5 }
                     ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
                 }
             });
-        }
-
-        // --- FUNCIONES MODAL Y GUARDADO ---
-        const modal = new bootstrap.Modal(document.getElementById('reservationModal'));
-        function openModal() { modal.show(); }
-        
-        function saveReservation() {
-            const newData = {
-                fecha: document.getElementById('fFecha').value,
-                hora: document.getElementById('fHora').value,
-                curso: document.getElementById('fCurso').value,
-                asignatura: document.getElementById('fAsignatura').value,
-                profesor: document.getElementById('fProfesor').value,
-                chromebooks: document.getElementById('fChrome').value,
-                reemplazo: document.getElementById('fReemp').value,
-                devueltos: document.getElementById('fDev').value,
-                observacion: document.getElementById('fObs').value
-            };
-            
-            // Simulación Local
-            dbData.push(newData);
-            renderApp();
-            modal.hide();
-
-            // CONEXIÓN REAL (Descomentar para usar con Google Apps Script)
-            /*
-            fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify(newData)
-            }).then(res => console.log("Guardado en Google Sheet"));
-            */
         }
     </script>
 </body>
