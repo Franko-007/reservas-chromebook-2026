@@ -27,7 +27,21 @@
         .week-tab.active { background: #107c41; color: white; border-color: #107c41; }
         
         /* Gráficos */
-        .card-chart { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; height: 250px; }
+        .card-chart { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+            margin-bottom: 20px; 
+            /* Aumentar la altura para el gráfico de docentes que ahora muestra todos */
+            height: 350px; 
+        }
+        
+        /* Ajustar la altura específica del canvas para el gráfico docente */
+        #chartDocenteContainer { 
+            height: 280px; 
+            overflow-y: auto; /* Permitir scroll si hay muchos docentes */
+        }
         
         /* Loading overlay */
         #loadingOverlay {
@@ -128,18 +142,18 @@
 
             <div class="col-lg-4">
                 <div class="card-chart">
-                    <h6 class="fw-bold text-secondary border-bottom pb-2">Reservas por Docente (Top 5)</h6>
-                    <div style="height: 180px;"><canvas id="chartDocente"></canvas></div>
+                    <h6 class="fw-bold text-secondary border-bottom pb-2">Docentes: Reservas, Fallas y Laboratorio</h6>
+                    <div id="chartDocenteContainer"><canvas id="chartDocente"></canvas></div>
                 </div>
-                <div class="card-chart">
+                <div class="card-chart" style="height: 250px;">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Asignaturas (Mes Actual)</h6>
                     <div style="height: 180px;"><canvas id="chartAsignatura"></canvas></div>
                 </div>
-                <div class="card-chart">
+                <div class="card-chart" style="height: 250px;">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Reporte de Fallas</h6>
                     <div style="height: 180px;"><canvas id="chartObservaciones"></canvas></div>
                 </div>
-                <div class="card-chart">
+                <div class="card-chart" style="height: 250px;">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Uso de Equipos</h6>
                     <div style="height: 180px;"><canvas id="chartEquipos"></canvas></div>
                 </div>
@@ -477,47 +491,94 @@
         function updateCharts(data) {
             const asignaturas = {};
             const observaciones = {};
-            const docentes = {}; // Nuevo objeto para contar docentes
+            const docentes = {}; // Objeto para el conteo de Docentes con más detalles
             let totalChrome = 0, totalReemp = 0;
 
             data.forEach(d => {
-                // Conteo de Asignaturas, Observaciones y Equipos (igual que antes)
+                // Conteo general
                 asignaturas[d.asignatura] = (asignaturas[d.asignatura] || 0) + 1;
                 observaciones[d.observacion] = (observaciones[d.observacion] || 0) + 1;
                 totalChrome += parseInt(d.chromebooks || 0);
                 totalReemp += parseInt(d.reemplazo || 0);
 
-                // Conteo de Docentes
+                // Conteo de Docentes (NUEVA LÓGICA)
                 if (d.profesor) {
-                    docentes[d.profesor] = (docentes[d.profesor] || 0) + 1;
+                    const profesor = d.profesor;
+                    if (!docentes[profesor]) {
+                        docentes[profesor] = { 
+                            reservas: 0, 
+                            fallasReportadas: 0,
+                            usoLaboratorio: 0
+                        };
+                    }
+                    
+                    docentes[profesor].reservas += 1;
+                    
+                    // Contar fallas si la observación no es "Sin novedad"
+                    if (d.observacion && d.observacion !== "Sin novedad") {
+                        docentes[profesor].fallasReportadas += 1;
+                    }
+                    
+                    // Contar si se usó en laboratorio (Suponemos: si el curso tiene "Lab" o si la observación lo menciona)
+                    if ((d.curso && d.curso.toLowerCase().includes("lab")) || (d.observacion && d.observacion.toLowerCase().includes("laboratorio"))) {
+                        docentes[profesor].usoLaboratorio += 1;
+                    }
                 }
             });
 
             // ----------------------------------------------------
-            // 1. GRÁFICO DOCENTES (Doughnut - Top 5)
+            // 1. GRÁFICO DOCENTES (Barra Horizontal - Muestra todos, ordenados)
             // ----------------------------------------------------
             const docentesArray = Object.entries(docentes)
-                .sort(([, a], [, b]) => b - a)
-                .slice(0, 5); // Obtener solo el Top 5
+                .sort(([, a], [, b]) => b.reservas - a.reservas); // Ordenar por cantidad de reservas
+
+            const labelsD = docentesArray.map(([prof]) => prof);
+            const reservasData = docentesArray.map(([, data]) => data.reservas);
+            const fallasData = docentesArray.map(([, data]) => data.fallasReportadas);
+            const labData = docentesArray.map(([, data]) => data.usoLaboratorio);
 
             const ctxD = document.getElementById('chartDocente');
             if(chartDocente) chartDocente.destroy();
             
+            // Ajustar altura del contenedor si hay muchos docentes (para que no se corte)
+            const containerD = document.getElementById('chartDocenteContainer');
+            const dynamicHeight = Math.max(280, labelsD.length * 40); // 40px por barra + base
+            containerD.style.height = `${dynamicHeight}px`;
+
             chartDocente = new Chart(ctxD, {
-                type: 'doughnut',
+                type: 'bar',
                 data: {
-                    labels: docentesArray.map(([prof, count]) => `${prof} (${count})`),
-                    datasets: [{ 
-                        data: docentesArray.map(([, count]) => count), 
-                        backgroundColor: ['#107c41', '#34a853', '#fbbc05', '#ea4335', '#4285f4'],
-                        hoverOffset: 4
-                    }]
+                    labels: labelsD,
+                    datasets: [
+                        { 
+                            label: 'Reservas Totales', 
+                            data: reservasData, 
+                            backgroundColor: '#107c41',
+                        },
+                        { 
+                            label: 'Fallas Reportadas', 
+                            data: fallasData, 
+                            backgroundColor: '#dc3545',
+                        },
+                        { 
+                            label: 'Uso Laboratorio', 
+                            data: labData, 
+                            backgroundColor: '#4285f4',
+                        }
+                    ]
                 },
                 options: { 
+                    indexAxis: 'y', // Hace el gráfico horizontal
                     responsive: true, 
                     maintainAspectRatio: false, 
-                    plugins: { 
-                        legend: { position: 'right' } 
+                    scales: {
+                        x: {
+                            stacked: false, 
+                            beginAtZero: true
+                        },
+                        y: {
+                            stacked: false
+                        }
                     }
                 }
             });
