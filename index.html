@@ -153,7 +153,7 @@
                 </div>
                 <div class="modal-body">
                     <form id="resForm">
-                        <input type="hidden" id="fId">
+                        <input type="hidden" id="fId"> 
 
                         <div class="row g-2">
                             <div class="col-6">
@@ -225,8 +225,8 @@
         // CONFIGURACIÓN IMPORTANTE
         // ==========================================================
         
-        // PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE (Version "exec")
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxx6i_I8LVaj9iTsUhsRgkX5JOpaIpyavXpJFGoz-CjeC7_JQSMEMLrizei5DJhI3w/exec"; 
+        // ¡TU URL DE APPS SCRIPT INTEGRADA!
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbym31JUVDuSNA0TC-O_GIkvtbnhtZQw3Rq7txeGcUf_GRyLuy0OoC_Z-a20psulT_o/exec"; 
 
         // ==========================================================
         
@@ -255,7 +255,7 @@
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert("Error cargando datos. Verifica tu conexión.");
+                    alert("Error cargando datos. Verifica tu conexión y el despliegue de Apps Script.");
                     showLoading(false);
                 });
         }
@@ -272,7 +272,8 @@
 
             const payload = {
                 action: id ? "update" : "create",
-                id: id,
+                // El ID es el número de fila que Apps Script nos devolvió.
+                id: id, 
                 fecha: document.getElementById('fFecha').value,
                 hora: document.getElementById('fHora').value,
                 curso: document.getElementById('fCurso').value,
@@ -298,7 +299,7 @@
             })
             .catch(err => {
                 console.error(err);
-                alert("Error de conexión. Intenta de nuevo.");
+                alert("Error de conexión al guardar. Intenta de nuevo.");
                 showLoading(false);
             });
         }
@@ -346,9 +347,10 @@
             document.getElementById('fCurso').value = item.curso;
             document.getElementById('fAsignatura').value = item.asignatura;
             document.getElementById('fProfesor').value = item.profesor;
-            document.getElementById('fChrome').value = item.chromebooks;
-            document.getElementById('fReemp').value = item.reemplazo;
-            document.getElementById('fDev').value = item.devueltos;
+            // Aseguramos que los valores numéricos se carguen, evitando nulos
+            document.getElementById('fChrome').value = item.chromebooks || 0;
+            document.getElementById('fReemp').value = item.reemplazo || 0;
+            document.getElementById('fDev').value = item.devueltos || 0;
             document.getElementById('fObs').value = item.observacion;
 
             document.querySelector('.modal-title').innerText = "Editar Reserva";
@@ -357,10 +359,11 @@
             myModal.show();
         }
 
-        // --- LÓGICA DE VISUALIZACIÓN ---
+        // --- LÓGICA DE VISUALIZACIÓN Y FILTROS ---
         function changeMonth(step) {
             let newIndex = currentMonthIndex + step;
-            if (newIndex >= 0 && newIndex < months.length) {
+            // Limitamos al rango de meses (Marzo a Diciembre)
+            if (newIndex >= 0 && newIndex < months.length) { 
                 currentMonthIndex = newIndex;
                 currentWeek = 0;
                 renderWeeks();
@@ -397,20 +400,9 @@
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
-        // --- FUNCIÓN ANTERIOR COMENTADA PORQUE YA NO SE NECESITA ---
-        /*
-        function formatTime(dateTimeStr) {
-            const timeMatch = dateTimeStr.match(/T(\d{2}:\d{2}:\d{2})/);
-            if (timeMatch && timeMatch[1]) {
-                return timeMatch[1].substring(0, 5);
-            }
-            return dateTimeStr;
-        }
-        */
-
-
         function renderApp() {
-            const selectedMonthNum = currentMonthIndex + 3; // Marzo es 3
+            // Marzo es el mes 3, por lo que sumamos 3
+            const selectedMonthNum = currentMonthIndex + 3; 
             const filterC = document.getElementById('filterCurso').value.toLowerCase();
             const filterP = document.getElementById('filterProfesor').value.toLowerCase();
 
