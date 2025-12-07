@@ -16,7 +16,7 @@
         th { background-color: #f2f2f2 !important; font-size: 0.85rem; text-transform: uppercase; vertical-align: middle; }
         td { font-size: 0.9rem; vertical-align: middle; }
         
-        /* Navegación */
+        /* Navegación por Meses */
         .month-nav { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 20px 0; }
         .nav-btn { background: #107c41; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; }
         .nav-btn:hover { background: #0b5c2f; }
@@ -226,7 +226,7 @@
         // ==========================================================
         
         // ¡TU URL DE APPS SCRIPT INTEGRADA!
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbym31JUVDuSNA0TC-O_GIkvtbnhtZQw3Rq7txeGcUf_GRyLuy0OoC_Z-a20psulT_o/exec"; 
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec"; 
 
         // ==========================================================
         
@@ -435,7 +435,8 @@
                 tbody.innerHTML += `
                     <tr>
                         <td>${formatDateCL(row.fecha)}</td>
-                        <td><strong>${row.hora}</strong></td> <td>${row.curso}</td>
+                        <td><strong>${row.hora}</strong></td> 
+                        <td>${row.curso}</td>
                         <td class="text-start">${row.asignatura}</td>
                         <td class="text-start">${row.profesor}</td>
                         <td>${row.chromebooks}</td>
