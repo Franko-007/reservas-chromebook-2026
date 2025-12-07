@@ -92,7 +92,6 @@
 					<option value="III">III°m B</option>
 					<option value="IV">IV°m A</option>
 					<option value="IV">IV°m B</option>
-                    
                 </select>
             </div>
             <div class="col-md-3">
@@ -129,6 +128,10 @@
 
             <div class="col-lg-4">
                 <div class="card-chart">
+                    <h6 class="fw-bold text-secondary border-bottom pb-2">Reservas por Docente (Top 5)</h6>
+                    <div style="height: 180px;"><canvas id="chartDocente"></canvas></div>
+                </div>
+                <div class="card-chart">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Asignaturas (Mes Actual)</h6>
                     <div style="height: 180px;"><canvas id="chartAsignatura"></canvas></div>
                 </div>
@@ -136,7 +139,7 @@
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Reporte de Fallas</h6>
                     <div style="height: 180px;"><canvas id="chartObservaciones"></canvas></div>
                 </div>
-                    <div class="card-chart">
+                <div class="card-chart">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Uso de Equipos</h6>
                     <div style="height: 180px;"><canvas id="chartEquipos"></canvas></div>
                 </div>
@@ -469,21 +472,58 @@
         }
 
         // --- GRÁFICOS ---
-        let chartAsig, chartObs, chartEq;
+        let chartAsig, chartObs, chartEq, chartDocente;
 
         function updateCharts(data) {
             const asignaturas = {};
             const observaciones = {};
+            const docentes = {}; // Nuevo objeto para contar docentes
             let totalChrome = 0, totalReemp = 0;
 
             data.forEach(d => {
+                // Conteo de Asignaturas, Observaciones y Equipos (igual que antes)
                 asignaturas[d.asignatura] = (asignaturas[d.asignatura] || 0) + 1;
                 observaciones[d.observacion] = (observaciones[d.observacion] || 0) + 1;
                 totalChrome += parseInt(d.chromebooks || 0);
                 totalReemp += parseInt(d.reemplazo || 0);
+
+                // Conteo de Docentes
+                if (d.profesor) {
+                    docentes[d.profesor] = (docentes[d.profesor] || 0) + 1;
+                }
             });
 
-            // 1. Asignaturas (Barras Verticales)
+            // ----------------------------------------------------
+            // 1. GRÁFICO DOCENTES (Doughnut - Top 5)
+            // ----------------------------------------------------
+            const docentesArray = Object.entries(docentes)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5); // Obtener solo el Top 5
+
+            const ctxD = document.getElementById('chartDocente');
+            if(chartDocente) chartDocente.destroy();
+            
+            chartDocente = new Chart(ctxD, {
+                type: 'doughnut',
+                data: {
+                    labels: docentesArray.map(([prof, count]) => `${prof} (${count})`),
+                    datasets: [{ 
+                        data: docentesArray.map(([, count]) => count), 
+                        backgroundColor: ['#107c41', '#34a853', '#fbbc05', '#ea4335', '#4285f4'],
+                        hoverOffset: 4
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right' } 
+                    }
+                }
+            });
+            // ----------------------------------------------------
+            
+            // 2. Gráfico Asignaturas (Barras Verticales)
             const ctxA = document.getElementById('chartAsignatura');
             if(chartAsig) chartAsig.destroy();
             chartAsig = new Chart(ctxA, {
@@ -500,7 +540,7 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
             });
 
-            // 2. Observaciones (Barras de Colores)
+            // 3. Gráfico Observaciones (Barras de Colores)
             const ctxO = document.getElementById('chartObservaciones');
             if(chartObs) chartObs.destroy();
             const obsLabels = Object.keys(observaciones);
@@ -521,25 +561,7 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
             });
 
-            // 3. Equipos (Comparativa)
+            // 4. Gráfico Equipos (Comparativa)
             const ctxE = document.getElementById('chartEquipos');
             if(chartEq) chartEq.destroy();
             chartEq = new Chart(ctxE, {
-                type: 'bar',
-                data: {
-                    labels: ['Equipos'],
-                    datasets: [
-                        { label: 'Solicitados', data: [totalChrome], backgroundColor: '#0d6efd', barPercentage: 0.5 },
-                        { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545', barPercentage: 0.5 }
-                    ]
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true } }
-                }
-            });
-        }
-    </script>
-</body>
-</html>
