@@ -158,6 +158,7 @@
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Docentes: Reservas, Fallas y Laboratorio</h6>
                     <div id="chartDocenteContainer"><canvas id="chartDocente"></canvas></div>
                 </div>
+                
                 <div class="card-chart" style="height: 250px;">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Asignaturas (Mes Actual)</h6>
                     <div style="height: 180px;"><canvas id="chartAsignatura"></canvas></div>
@@ -399,4 +400,314 @@
 
         // --- GESTIÓN DE MODALES ---
         const modalElement = document.getElementById('reservationModal');
-        const myModal = new bootstrap.Modal(modalElement
+        const myModal = new bootstrap.Modal(modalElement);
+
+        function openModal() {
+            document.getElementById('resForm').reset();
+            document.getElementById('fId').value = ""; // Limpiar ID para modo "Crear"
+            document.querySelector('.modal-title').innerText = "Nueva Reserva";
+            document.querySelector('.modal-header').classList.remove('bg-warning');
+            document.querySelector('.modal-header').classList.add('bg-success');
+            myModal.show();
+        }
+
+        function editItem(id) {
+            const item = dbData.find(d => d.id.toString() === id.toString());
+            if (!item) return;
+
+            document.getElementById('fId').value = item.id;
+            document.getElementById('fFecha').value = item.fecha;
+            document.getElementById('fHora').value = item.hora;
+            document.getElementById('fCurso').value = item.curso;
+            document.getElementById('fAsignatura').value = item.asignatura;
+            document.getElementById('fProfesor').value = item.profesor;
+            // Aseguramos que los valores numéricos se carguen, evitando nulos
+            document.getElementById('fChrome').value = item.chromebooks || 0;
+            document.getElementById('fReemp').value = item.reemplazo || 0;
+            document.getElementById('fDev').value = item.devueltos || 0;
+            document.getElementById('fObs').value = item.observacion;
+
+            document.querySelector('.modal-title').innerText = "Editar Reserva";
+            document.querySelector('.modal-header').classList.remove('bg-success');
+            document.querySelector('.modal-header').classList.add('bg-warning');
+            myModal.show();
+        }
+
+        // --- LÓGICA DE VISUALIZACIÓN Y FILTROS ---
+        function changeMonth(step) {
+            let newIndex = currentMonthIndex + step;
+            // Limitamos al rango de meses (Marzo a Diciembre)
+            if (newIndex >= 0 && newIndex < months.length) { 
+                currentMonthIndex = newIndex;
+                currentWeek = 0;
+                renderWeeks();
+                renderApp();
+            }
+        }
+
+        function setWeek(weekNum) {
+            currentWeek = weekNum;
+            renderWeeks();
+            renderApp();
+        }
+
+        function renderWeeks() {
+            const container = document.getElementById('weekTabs');
+            let html = `<div class="week-tab ${currentWeek === 0 ? 'active' : ''}" onclick="setWeek(0)">Mes Completo</div>`;
+            for(let i=1; i<=4; i++) {
+                html += `<div class="week-tab ${currentWeek === i ? 'active' : ''}" onclick="setWeek(${i})">Semana ${i}</div>`;
+            }
+            container.innerHTML = html;
+            document.getElementById('currentMonthLabel').innerText = `${months[currentMonthIndex]} ${year}`;
+        }
+
+        function getWeekNumber(dateString) {
+            const parts = dateString.split('-'); 
+            const day = parseInt(parts[2]);
+            if (day <= 7) return 1;
+            if (day <= 14) return 2;
+            if (day <= 21) return 3;
+            return 4;
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        function renderApp() {
+            // Marzo es el mes 3, por lo que sumamos 3
+            const selectedMonthNum = currentMonthIndex + 3; 
+            const filterC = document.getElementById('filterCurso').value.toLowerCase();
+            const filterP = document.getElementById('filterProfesor').value.toLowerCase();
+
+            let filtered = dbData.filter(item => {
+                const parts = item.fecha.split('-');
+                const itemYear = parseInt(parts[0]);
+                const itemMonth = parseInt(parts[1]);
+                
+                if (itemYear !== year || itemMonth !== selectedMonthNum) return false;
+                if (currentWeek !== 0 && getWeekNumber(item.fecha) !== currentWeek) return false;
+                if (filterC && !item.curso.toLowerCase().includes(filterC)) return false;
+                if (filterP && !item.profesor.toLowerCase().includes(filterP)) return false;
+                return true;
+            });
+
+            // Ordenar por Fecha y luego por Hora
+            filtered.sort((a, b) => {
+                if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+                return a.hora.localeCompare(b.hora);
+            });
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-muted p-4">No hay reservas en este período</td></tr>';
+            }
+
+            filtered.forEach(row => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${formatDateCL(row.fecha)}</td>
+                        <td><strong>${row.hora}</strong></td> 
+                        <td>${row.curso}</td>
+                        <td class="text-start">${row.asignatura}</td>
+                        <td class="text-start">${row.profesor}</td>
+                        <td>${row.chromebooks}</td>
+                        <td class="${row.reemplazo > 0 ? 'text-danger fw-bold' : ''}">${row.reemplazo}</td>
+                        <td>${row.devueltos}</td>
+                        
+                        <td>
+                            <input type="text" 
+                                class="form-control form-control-sm quick-edit-input" 
+                                value="${row.observacion || ''}" 
+                                onblur="quickUpdateObservation('${row.id}', this.value)" 
+                                placeholder="Sin novedad"
+                                title="Edita y haz clic fuera para guardar">
+                        </td>
+                        <td>
+                            <button class="btn btn-outline-warning btn-sm py-0 px-1" onclick="editItem('${row.id}')" title="Editar Completo">✏️</button>
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteItem('${row.id}')" title="Borrar">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('totalCount').innerText = `${filtered.length} Registros`;
+            updateCharts(filtered);
+        }
+
+        function formatDateCL(dateStr) {
+            // Convierte YYYY-MM-DD a DD/MM
+            const p = dateStr.split('-');
+            return `${p[2]}/${p[1]}`;
+        }
+
+        function getColorForObs(obs) {
+            if(!obs) return 'black';
+            if(obs.includes('Dañada') || obs.includes('No Enciende')) return '#dc3545'; // Rojo
+            if(obs.includes('Falla') || obs.includes('Malo')) return '#fd7e14'; // Naranja
+            return '#198754'; // Verde
+        }
+
+        // --- GRÁFICOS ---
+        let chartAsig, chartObs, chartEq, chartDocente;
+
+        function updateCharts(data) {
+            const asignaturas = {};
+            const observaciones = {};
+            const docentes = {}; // Objeto para el conteo de Docentes con más detalles
+            let totalChrome = 0, totalReemp = 0;
+
+            data.forEach(d => {
+                // Conteo general
+                asignaturas[d.asignatura] = (asignaturas[d.asignatura] || 0) + 1;
+                observaciones[d.observacion] = (observaciones[d.observacion] || 0) + 1;
+                totalChrome += parseInt(d.chromebooks || 0);
+                totalReemp += parseInt(d.reemplazo || 0);
+
+                // Conteo de Docentes
+                if (d.profesor) {
+                    const profesor = d.profesor;
+                    if (!docentes[profesor]) {
+                        docentes[profesor] = { 
+                            reservas: 0, 
+                            fallasReportadas: 0,
+                            usoLaboratorio: 0
+                        };
+                    }
+                    
+                    docentes[profesor].reservas += 1;
+                    
+                    // Contar fallas si la observación no es "Sin novedad"
+                    const obsLower = (d.observacion || '').toLowerCase();
+                    if (obsLower.includes("dañada") || obsLower.includes("falla") || obsLower.includes("no enciende") || obsLower.includes("malo") || (obsLower.length > 0 && obsLower !== "sin novedad")) {
+                        docentes[profesor].fallasReportadas += 1;
+                    }
+                    
+                    // Contar si se usó en laboratorio (Suponemos: si el curso tiene "Lab" o si la observación lo menciona)
+                    const cursoLower = (d.curso || '').toLowerCase();
+                    if (cursoLower.includes("lab") || obsLower.includes("laboratorio")) {
+                        docentes[profesor].usoLaboratorio += 1;
+                    }
+                }
+            });
+
+            // ----------------------------------------------------
+            // 1. GRÁFICO DOCENTES (Barra Horizontal - Muestra todos, ordenados)
+            // ----------------------------------------------------
+            const docentesArray = Object.entries(docentes)
+                .sort(([, a], [, b]) => b.reservas - a.reservas); // Ordenar por cantidad de reservas
+
+            const labelsD = docentesArray.map(([prof]) => prof);
+            const reservasData = docentesArray.map(([, data]) => data.reservas);
+            const fallasData = docentesArray.map(([, data]) => data.fallasReportadas);
+            const labData = docentesArray.map(([, data]) => data.usoLaboratorio);
+
+            const ctxD = document.getElementById('chartDocente');
+            if(chartDocente) chartDocente.destroy();
+            
+            // Ajustar altura del contenedor si hay muchos docentes (para que no se corte)
+            const containerD = document.getElementById('chartDocenteContainer');
+            const dynamicHeight = Math.max(280, labelsD.length * 40); // 40px por barra + base
+            containerD.style.height = `${dynamicHeight}px`;
+
+            chartDocente = new Chart(ctxD, {
+                type: 'bar',
+                data: {
+                    labels: labelsD,
+                    datasets: [
+                        { 
+                            label: 'Reservas Totales', 
+                            data: reservasData, 
+                            backgroundColor: '#107c41',
+                        },
+                        { 
+                            label: 'Fallas Reportadas', 
+                            data: fallasData, 
+                            backgroundColor: '#dc3545',
+                        },
+                        { 
+                            label: 'Uso Laboratorio', 
+                            data: labData, 
+                            backgroundColor: '#4285f4',
+                        }
+                    ]
+                },
+                options: { 
+                    indexAxis: 'y', // Hace el gráfico horizontal
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: {
+                        x: {
+                            stacked: false, 
+                            beginAtZero: true
+                        },
+                        y: {
+                            stacked: false
+                        }
+                    }
+                }
+            });
+            // ----------------------------------------------------
+            
+            // 2. Gráfico Asignaturas (Barras Verticales)
+            const ctxA = document.getElementById('chartAsignatura');
+            if(chartAsig) chartAsig.destroy();
+            chartAsig = new Chart(ctxA, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(asignaturas),
+                    datasets: [{ 
+                        label: 'Reservas', 
+                        data: Object.values(asignaturas), 
+                        backgroundColor: '#107c41',
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
+            });
+
+            // 3. Gráfico Observaciones (Barras de Colores)
+            const ctxO = document.getElementById('chartObservaciones');
+            if(chartObs) chartObs.destroy();
+            const obsLabels = Object.keys(observaciones);
+            const obsData = Object.values(observaciones);
+            const obsColors = obsLabels.map(k => getColorForObs(k));
+
+            chartObs = new Chart(ctxO, {
+                type: 'bar',
+                data: {
+                    labels: obsLabels,
+                    datasets: [{ 
+                        label: 'Cantidad', 
+                        data: obsData, 
+                        backgroundColor: obsColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} } }
+            });
+
+            // 4. Gráfico Equipos (Comparativa)
+            const ctxE = document.getElementById('chartEquipos');
+            if(chartEq) chartEq.destroy();
+            chartEq = new Chart(ctxE, {
+                type: 'bar',
+                data: {
+                    labels: ['Equipos'],
+                    datasets: [
+                        { label: 'Solicitados', data: [totalChrome], backgroundColor: '#0d6efd', barPercentage: 0.5 },
+                        { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545', barPercentage: 0.5 }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
