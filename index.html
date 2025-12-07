@@ -291,9 +291,9 @@
                 });
         }
 
-        // --- FUNCIÓN DE ACTUALIZACIÓN RÁPIDA (NUEVA) ---
+        // --- FUNCIÓN DE ACTUALIZACIÓN RÁPIDA (QUICK UPDATE) ---
         function quickUpdateObservation(id, newObservation) {
-            // No hacemos nada si el valor no cambió o está vacío
+            // No hacemos nada si el valor no cambió
             const item = dbData.find(d => d.id.toString() === id.toString());
             if (!item || item.observacion === newObservation) {
                 return; 
@@ -579,13 +579,19 @@
                     
                     docentes[profesor].reservas += 1;
                     
-                    // Contar fallas si la observación no es "Sin novedad"
+                    // LÓGICA DE FALLAS MODIFICADA (Estricta): Solo cuenta palabras clave específicas
                     const obsLower = (d.observacion || '').toLowerCase();
-                    if (obsLower.includes("dañada") || obsLower.includes("falla") || obsLower.includes("no enciende") || obsLower.includes("malo") || (obsLower.length > 0 && obsLower !== "sin novedad")) {
+                    if (
+                        obsLower.includes("dañada") || 
+                        obsLower.includes("falla") || 
+                        obsLower.includes("no enciende") || 
+                        obsLower.includes("malo") ||
+                        obsLower.includes("rota") 
+                    ) {
                         docentes[profesor].fallasReportadas += 1;
                     }
                     
-                    // Contar si se usó en laboratorio (Suponemos: si el curso tiene "Lab" o si la observación lo menciona)
+                    // Contar si se usó en laboratorio
                     const cursoLower = (d.curso || '').toLowerCase();
                     if (cursoLower.includes("lab") || obsLower.includes("laboratorio")) {
                         docentes[profesor].usoLaboratorio += 1;
