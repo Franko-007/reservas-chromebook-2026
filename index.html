@@ -136,7 +136,7 @@
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Reporte de Fallas</h6>
                     <div style="height: 180px;"><canvas id="chartObservaciones"></canvas></div>
                 </div>
-                   <div class="card-chart">
+                    <div class="card-chart">
                     <h6 class="fw-bold text-secondary border-bottom pb-2">Uso de Equipos</h6>
                     <div style="height: 180px;"><canvas id="chartEquipos"></canvas></div>
                 </div>
@@ -226,7 +226,7 @@
         // ==========================================================
         
         // PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE (Version "exec")
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxx6i_I8LVaj9iTsUhsRgkX5JOpaIpyavXpJFGoz-CjeC7_JQSMEMLrizei5DJhI3w/exec"; 
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxx6i_I8LVaj9iTsUhsRgkX5JOpaIpyavXpJFGoz-CjeC7_JQSMEMLrizei5DJhI3w/exec"; 
 
         // ==========================================================
         
@@ -234,7 +234,7 @@
         let dbData = [];
         const months = ["Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         let currentMonthIndex = 0; // 0 = Marzo
-        let currentWeek = 0; 
+        let currentWeek = 0; 
         let year = 2026;
 
         // --- INICIO ---
@@ -385,7 +385,7 @@
         }
 
         function getWeekNumber(dateString) {
-            const parts = dateString.split('-'); 
+            const parts = dateString.split('-'); 
             const day = parseInt(parts[2]);
             if (day <= 7) return 1;
             if (day <= 14) return 2;
@@ -397,19 +397,16 @@
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
-        // --- FUNCIÓN PARA EXTRAER HORA DE FORMATO ISO (1899-12-30T...) ---
+        // --- FUNCIÓN ANTERIOR COMENTADA PORQUE YA NO SE NECESITA ---
+        /*
         function formatTime(dateTimeStr) {
-            // Usa una expresión regular para capturar la hora (HH:mm:ss)
             const timeMatch = dateTimeStr.match(/T(\d{2}:\d{2}:\d{2})/);
-
             if (timeMatch && timeMatch[1]) {
-                // Devuelve HH:MM (sin segundos)
                 return timeMatch[1].substring(0, 5);
             }
-
-            // Si ya viene en formato HH:MM o similar
             return dateTimeStr;
         }
+        */
 
 
         function renderApp() {
@@ -446,8 +443,7 @@
                 tbody.innerHTML += `
                     <tr>
                         <td>${formatDateCL(row.fecha)}</td>
-                        <td><strong>${formatTime(row.hora)}</strong></td>
-                        <td>${row.curso}</td>
+                        <td><strong>${row.hora}</strong></td> <td>${row.curso}</td>
                         <td class="text-start">${row.asignatura}</td>
                         <td class="text-start">${row.profesor}</td>
                         <td>${row.chromebooks}</td>
@@ -501,9 +497,9 @@
                 type: 'bar',
                 data: {
                     labels: Object.keys(asignaturas),
-                    datasets: [{ 
-                        label: 'Reservas', 
-                        data: Object.values(asignaturas), 
+                    datasets: [{ 
+                        label: 'Reservas', 
+                        data: Object.values(asignaturas), 
                         backgroundColor: '#107c41',
                         borderRadius: 4
                     }]
@@ -522,9 +518,9 @@
                 type: 'bar',
                 data: {
                     labels: obsLabels,
-                    datasets: [{ 
-                        label: 'Cantidad', 
-                        data: obsData, 
+                    datasets: [{ 
+                        label: 'Cantidad', 
+                        data: obsData, 
                         backgroundColor: obsColors,
                         borderRadius: 4
                     }]
@@ -544,8 +540,8 @@
                         { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545', barPercentage: 0.5 }
                     ]
                 },
-                options: { 
-                    responsive: true, 
+                options: { 
+                    responsive: true, 
                     maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true } }
                 }
