@@ -565,3 +565,21 @@
             const ctxE = document.getElementById('chartEquipos');
             if(chartEq) chartEq.destroy();
             chartEq = new Chart(ctxE, {
+                type: 'bar',
+                data: {
+                    labels: ['Equipos'],
+                    datasets: [
+                        { label: 'Solicitados', data: [totalChrome], backgroundColor: '#0d6efd', barPercentage: 0.5 },
+                        { label: 'Reemplazo', data: [totalReemp], backgroundColor: '#dc3545', barPercentage: 0.5 }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
