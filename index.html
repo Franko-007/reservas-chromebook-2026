@@ -193,7 +193,7 @@
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec";
-        let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
+        let db = [], viewDate = new Date(2026, 3, 1), filterMode = 'all', currentWeek = 0, charts = {};
 
         async function load() { 
             document.getElementById('loading').style.display = 'flex';
@@ -205,13 +205,23 @@
         }
 
         function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
+        
         function setFilterWeek(w) { 
             currentWeek = w; 
             document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w));
             renderAll(); 
         }
+
         function setFilterMode(m) { filterMode = m; renderAll(); }
-        function resetApp() { filterMode = 'all'; currentWeek = 0; document.getElementById('searchBox').value = ''; document.getElementById('courseSelect').value = ''; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); renderAll(); }
+
+        function resetApp() { 
+            filterMode = 'all'; 
+            currentWeek = 0; 
+            document.getElementById('searchBox').value = ''; 
+            document.getElementById('courseSelect').value = ''; 
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); 
+            renderAll(); 
+        }
 
         function renderAll() {
             const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -220,8 +230,8 @@
             const s = document.getElementById('searchBox').value.toLowerCase();
             const c = document.getElementById('courseSelect').value;
 
-            // FILTRO DE DATOS: Asegura que todo respete el mes seleccionado
-            const filtered = db.filter(d => {
+            // 1. FILTRADO BASE (MES + SEMANA + BUSQUEDA + CURSO)
+            const baseFiltered = db.filter(d => {
                 const date = new Date(d.fecha);
                 const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
                 const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
@@ -234,16 +244,19 @@
                     const end = currentWeek * 7;
                     matchW = (day >= start && day <= end);
                 }
-
-                let matchF = true;
-                if(filterMode === 'lab') matchF = (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
-                if(filterMode === 'reemp') matchF = parseInt(d.reemplazo || 0) > 0;
-                if(filterMode === 'ok') matchF = (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0;
-                
-                return matchM && matchS && matchC && matchW && matchF;
+                return matchM && matchS && matchC && matchW;
             });
 
-            document.getElementById('tableBody').innerHTML = filtered.map(r => {
+            // 2. FILTRADO POR MODO (KPIs Seleccionados)
+            const finalFiltered = baseFiltered.filter(d => {
+                if(filterMode === 'lab') return (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+                if(filterMode === 'reemp') return parseInt(d.reemplazo || 0) > 0;
+                if(filterMode === 'ok') return (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0;
+                return true;
+            });
+
+            // RENDERIZAR TABLA
+            document.getElementById('tableBody').innerHTML = finalFiltered.map(r => {
                 const isL = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
                 return `<tr class="${isL?'row-lab':''}">
                     <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
@@ -253,25 +266,26 @@
                     <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                     <td class="text-success fw-bold">${r.devueltos}</td>
                     <td class="small">${isL?'<span class="badge-lab">LABORATORIO</span>':r.observacion}</td>
-                    <td><button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button></td></tr>`;
+                    <td>
+                        <div class="d-flex justify-content-center gap-1">
+                            <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button>
+                            <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')">🗑️</button>
+                        </div>
+                    </td></tr>`;
             }).join('');
 
-            // ACTUALIZACIÓN DE KPIs: Ahora solo cuentan el mes actual
-            const currentMonthData = db.filter(d => {
-                const date = new Date(d.fecha);
-                return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-            });
-
-            const labCount = currentMonthData.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
-            const reempCount = currentMonthData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-            const okCount = currentMonthData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+            // ACTUALIZACIÓN DE RECUADROS (KPIs) USANDO EL FILTRO SEMANAL
+            // Usamos baseFiltered para que los números cambien según la semana y el mes
+            const labCount = baseFiltered.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+            const reempCount = baseFiltered.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+            const okCount = baseFiltered.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
             
-            document.getElementById('kpi-total').innerText = currentMonthData.length;
+            document.getElementById('kpi-total').innerText = baseFiltered.length;
             document.getElementById('kpi-lab').innerText = labCount;
             document.getElementById('kpi-reemp').innerText = reempCount;
-            document.getElementById('kpi-ok').innerText = currentMonthData.length > 0 ? Math.round((okCount / currentMonthData.length) * 100) + "%" : "0%";
+            document.getElementById('kpi-ok').innerText = baseFiltered.length > 0 ? Math.round((okCount / baseFiltered.length) * 100) + "%" : "0%";
 
-            updateCharts(filtered);
+            updateCharts(finalFiltered);
         }
 
         function updateCharts(data) {
@@ -306,6 +320,18 @@
             new bootstrap.Modal(document.getElementById('resModal')).show();
         }
 
+        async function deleteItem(id) {
+            if(!confirm("¿Franco, estás seguro de eliminar este registro?")) return;
+            document.getElementById('loading').style.display = 'flex';
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
+                load();
+            } catch(e) { 
+                alert("Error al eliminar"); 
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
         function openModal() { document.getElementById('resForm').reset(); document.getElementById('fId').value = ''; new bootstrap.Modal(document.getElementById('resModal')).show(); }
 
         async function saveData() {
@@ -323,9 +349,14 @@
                 devueltos: document.getElementById('fDev').value,
                 observacion: document.getElementById('fObs').value
             };
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-            bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
-            load();
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+                load();
+            } catch(e) {
+                alert("Error al guardar");
+                document.getElementById('loading').style.display = 'none';
+            }
         }
 
         window.onload = load;
