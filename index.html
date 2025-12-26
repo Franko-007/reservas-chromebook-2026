@@ -3,463 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión Chromebooks NSG - 2026</title>
+    <title>Gestión Chromebooks 2026 - Franco</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --excel-green: #107c41; --excel-dark: #0b5c2f; }
-        body { 
-            background-color: #f4f7f6; 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
+        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; }
+        body { background-color: var(--bg-light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; }
         
-        .excel-header { background-color: var(--excel-green); color: white; padding: 12px 20px; border-bottom: 4px solid var(--excel-dark); z-index: 1030; }
-        .table-container { background: white; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; }
-        
-        th { background-color: #f8f9fa !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; }
-        td { font-size: 0.88rem; vertical-align: middle; border-color: #f1f1f1 !important; }
-        
-        .month-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 15px 0; }
-        .nav-btn { background: var(--excel-green); color: white; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
-        .nav-btn:hover { background: var(--excel-dark); transform: scale(1.1); }
-        
-        .week-tabs { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap; }
-        .week-tab { padding: 6px 16px; border: 1px solid #ddd; background: white; cursor: pointer; border-radius: 20px; font-size: 0.85rem; transition: 0.3s; }
-        .week-tab.active { background: var(--excel-green); color: white; border-color: var(--excel-green); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        
-        .card-chart { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 20px; }
-        #chartDocenteContainer { height: 300px; overflow-y: auto; scrollbar-width: thin; }
+        .header-main { background-color: #0d6832; color: white; padding: 15px 25px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .header-icon { width: 45px; height: 45px; }
+        .header-titles h1 { font-size: 1.6rem; margin: 0; font-weight: bold; letter-spacing: 0.5px; }
+        .header-titles p { font-size: 0.9rem; margin: 0; opacity: 0.9; }
 
-        .quick-edit-input { font-size: 0.8rem; border: 1px solid transparent; background-color: transparent; transition: 0.2s; text-align: center; border-radius: 4px; width: 100%; }
-        .quick-edit-input:hover { border-color: #ced4da; background-color: #fff; }
-        .quick-edit-input:focus { background-color: #fffbe0; border-color: #ffc107; outline: none; box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.2); }
-        
-        /* Footer con tus derechos */
-        .nsg-footer {
-            background-color: #333;
-            color: #ccc;
-            padding: 15px 0;
-            text-align: center;
-            font-size: 0.85rem;
-            margin-top: auto;
-            border-top: 3px solid var(--excel-green);
-        }
-        .nsg-footer b { color: white; }
+        .action-bar { background: white; padding: 10px 25px; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; position: sticky; top: 0; z-index: 1000; }
 
-        #loadingOverlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.85); z-index: 9999; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-            backdrop-filter: blur(2px);
-        }
+        .month-selector { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 25px 0; }
+        .nav-btn { background: #0d6832; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .nav-btn:hover { background: #0a5227; transform: scale(1.1); }
+        
+        .week-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; }
+        .tab-btn { background: white; border: 1px solid #ddd; border-radius: 25px; padding: 8px 20px; font-size: 0.9rem; cursor: pointer; transition: 0.3s; font-weight: 500; }
+        .tab-btn.active { background: #0d6832; color: white; border-color: #0d6832; box-shadow: 0 4px 8px rgba(13, 104, 50, 0.3); }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; padding: 0 25px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); cursor: pointer; transition: 0.3s; border: 1px solid transparent; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); border-color: #0d6832; }
+        .kpi-card h6 { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
+        .kpi-card div { font-size: 2.2rem; font-weight: 900; }
+
+        .main-grid { display: grid; grid-template-columns: 1fr 400px; gap: 25px; padding: 0 25px 40px 25px; }
+        .content-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .chart-box { height: 280px; width: 100%; margin-top: 15px; }
+
+        .table-res { overflow-y: auto; max-height: 650px; border-radius: 8px; }
+        thead th { background-color: #f8f9fa !important; color: #555; text-transform: uppercase; font-size: 0.7rem; padding: 12px !important; border-bottom: 2px solid #eee; }
+        .row-lab { background-color: #fcfaff !important; border-left: 6px solid var(--purple-lab) !important; }
+        .badge-lab { background: var(--purple-lab); color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.7rem; }
+        
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
+        .footer { text-align: center; padding: 20px; border-top: 1px solid #ddd; background: white; margin-top: 20px; color: #999; }
     </style>
 </head>
 <body>
 
-    <div id="loadingOverlay">
-        <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
-        <div class="mt-3 fw-bold text-success text-uppercase">Sincronizando...</div>
+    <div id="loading">
+        <div class="spinner-border text-success" style="width: 3rem; height: 3rem;"></div>
+        <span class="mt-3 fw-bold text-dark">Sincronizando con el Panel de Franco...</span>
     </div>
 
-    <div class="excel-header container-fluid d-flex justify-content-between align-items-center sticky-top">
-        <div>
-            <h5 class="m-0 fw-bold">📅 Gestión Chromebooks 2026</h5>
-            <small class="opacity-75">Panel de Control Tec. Informático</small>
-        </div>
-        <div>
-            <button class="btn btn-light btn-sm fw-bold shadow-sm" onclick="loadData()">🔄 Actualizar</button>
-            <button class="btn btn-warning btn-sm fw-bold shadow-sm ms-2" onclick="openModal()">+ Nueva Reserva</button>
+    <div class="header-main">
+        <img src="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" alt="Icono" class="header-icon">
+        <div class="header-titles">
+            <h1>Gestión Chromebooks 2026</h1>
+            <p>Panel de Control Tec. Informático</p>
         </div>
     </div>
 
-    <div class="container-fluid mt-3 flex-grow-1">
-        <div class="month-nav">
-            <button class="nav-btn" onclick="changeMonth(-1)">&#10094;</button>
-            <h3 id="currentMonthLabel" class="m-0 fw-bold text-dark" style="min-width: 200px; text-align: center;">Marzo 2026</h3>
-            <button class="nav-btn" onclick="changeMonth(1)">&#10095;</button>
+    <div class="action-bar">
+        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="window.print()">🖨️ IMPRIMIR</button>
+        <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
+        <button class="btn btn-warning btn-sm fw-bold px-3" onclick="openModal()">+ NUEVA RESERVA</button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="month-selector">
+            <button class="nav-btn" onclick="moveMonth(-1)">❮</button>
+            <h2 class="m-0 fw-bold" id="displayDate" style="min-width: 250px; text-align: center; color: #2c3e50;">Marzo 2026</h2>
+            <button class="nav-btn" onclick="moveMonth(1)">❯</button>
         </div>
 
-        <div class="week-tabs" id="weekTabs"></div>
+        <div class="week-tabs">
+            <button class="tab-btn active" id="t0" onclick="setFilterWeek(0)">Mes Completo</button>
+            <button class="tab-btn" id="t1" onclick="setFilterWeek(1)">Semana 1</button>
+            <button class="tab-btn" id="t2" onclick="setFilterWeek(2)">Semana 2</button>
+            <button class="tab-btn" id="t3" onclick="setFilterWeek(3)">Semana 3</button>
+            <button class="tab-btn" id="t4" onclick="setFilterWeek(4)">Semana 4</button>
+        </div>
 
-        <div class="row mb-3 g-2 align-items-center">
-            <div class="col-md-3">
-                <select id="filterCurso" class="form-select form-select-sm shadow-sm" onchange="renderApp()">
-                    <option value="">Todos los Cursos</option>
-                    <optgroup label="Básica">
-                        <option value="1° A">1° A</option><option value="1° B">1° B</option>
-                        <option value="2° A">2° A</option><option value="2° B">2° B</option>
-                        <option value="3° A">3° A</option><option value="3° B">3° B</option>
-                        <option value="4° A">4° A</option><option value="4° B">4° B</option>
-                        <option value="5° A">5° A</option><option value="5° B">5° B</option>
-                        <option value="6° A">6° A</option><option value="6° B">6° B</option>
-                        <option value="7° A">7° A</option><option value="7° B">7° B</option>
-                        <option value="8° A">8° A</option><option value="8° B">8° B</option>
-                    </optgroup>
-                    <optgroup label="Media">
-                        <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
-                        <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
-                        <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
-                        <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
-                    </optgroup>
-                </select>
+        <div class="kpi-row">
+            <div class="kpi-card" onclick="resetApp()">
+                <h6>Préstamos</h6>
+                <div id="kpi-total" style="color: #107c41">0</div>
             </div>
-            <div class="col-md-3">
-                <input type="text" id="filterProfesor" class="form-control form-control-sm shadow-sm" placeholder="🔍 Buscar Profesor..." onkeyup="renderApp()">
+            <div class="kpi-card" onclick="setFilterMode('lab')">
+                <h6>Laboratorio</h6>
+                <div id="kpi-lab" style="color: #0b5c2f">0</div>
             </div>
-            <div class="col-md-6 text-end">
-                <span class="badge bg-dark px-3 py-2 shadow-sm" id="totalCount">Cargando...</span>
+            <div class="kpi-card" onclick="setFilterMode('reemp')">
+                <h6>Reemplazos</h6>
+                <div id="kpi-reemp" style="color: #dc3545">0</div>
+            </div>
+            <div class="kpi-card" onclick="setFilterMode('ok')">
+                <h6>Retorno OK</h6>
+                <div id="kpi-ok" style="color: #198754">0%</div>
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-lg-8 mb-4">
-                <div class="table-container shadow-sm">
-                    <div class="table-responsive" style="max-height: 750px;">
-                        <table class="table table-hover m-0 table-sm text-center" id="mainTable">
-                            <thead class="sticky-top" style="z-index: 10;">
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Hora</th>
-                                    <th>Curso</th>
-                                    <th class="text-start">Asignatura</th>
-                                    <th class="text-start">Profesor</th>
-                                    <th>Chr.</th>
-                                    <th>Ree.</th>
-                                    <th>Dev.</th>
-                                    <th style="width: 20%;">Observación</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tableBody"></tbody>
-                        </table>
+        <div class="main-grid">
+            <div class="content-card">
+                <div class="row g-2 mb-4">
+                    <div class="col-md-7">
+                        <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="renderAll()">
+                    </div>
+                    <div class="col-md-5">
+                        <select id="courseSelect" class="form-select form-select-lg shadow-sm" style="font-size: 0.9rem;" onchange="renderAll()">
+                            <option value="">Cursos (Todos)</option>
+                            <optgroup label="Básica">
+                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
+                            </optgroup>
+                            <optgroup label="Media">
+                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
+                            </optgroup>
+                        </select>
                     </div>
                 </div>
+
+                <div class="table-res">
+                    <table class="table table-hover align-middle text-center">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Observación</th><th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
             </div>
 
-            <div class="col-lg-4">
-                <div class="card-chart">
-                    <h6 class="fw-bold text-secondary border-bottom pb-2 mb-3">Estadísticas por Docente</h6>
-                    <div id="chartDocenteContainer"><canvas id="chartDocente"></canvas></div>
+            <div>
+                <div class="content-card mb-4">
+                    <h6 class="fw-bold mb-0 text-muted">Estadísticas por Docente</h6>
+                    <div class="chart-box"><canvas id="chartDocente"></canvas></div>
                 </div>
-                
-                <div class="card-chart" style="height: 250px;">
-                    <h6 class="fw-bold text-secondary border-bottom pb-2 mb-3">Uso por Asignatura</h6>
-                    <canvas id="chartAsignatura"></canvas>
-                </div>
-
-                <div class="card-chart" style="height: 220px;">
-                    <h6 class="fw-bold text-secondary border-bottom pb-2 mb-3">Equipos Solicitados</h6>
-                    <canvas id="chartEquipos"></canvas>
-                </div>
-
-                <div class="card-chart" style="height: 220px;">
-                    <h6 class="fw-bold text-secondary border-bottom pb-2 mb-3">Estado Técnico</h6>
-                    <canvas id="chartObservaciones"></canvas>
+                <div class="content-card">
+                    <h6 class="fw-bold mb-0 text-muted">Uso por Asignatura</h6>
+                    <div class="chart-box"><canvas id="chartAsignatura"></canvas></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer class="nsg-footer">
-        Derechos Reservados - <b>NSG 2026</b> - Por <b>Franco</b>
+    <div class="modal fade" id="resModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">EDITAR REGISTRO</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-4"><form id="resForm" class="row g-3">
+                <input type="hidden" id="fId">
+                <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control"></div>
+                <div class="col-md-6"><label class="fw-bold small text-muted">BLOQUE</label>
+                    <select id="fHora" class="form-select">
+                        <option value="08:10">08:10</option><option value="10:00">10:00</option>
+                        <option value="11:50">11:50</option><option value="14:00">14:00</option>
+                    </select>
+                </div>
+                <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control"></div>
+                <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control"></div>
+                <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control"></div>
+                
+                <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light"></div>
+                <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light"></div>
+                <div class="col-md-4"><label class="fw-bold small text-success">DEVUELTOS</label><input type="number" id="fDev" class="form-control bg-light"></div>
+                
+                <div class="col-12"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
+                    <select id="fObs" class="form-select border-primary">
+                        <option value="Sin novedad">✅ Sin novedad</option>
+                        <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
+                        <option value="Teclado Falla">🟠 Teclado Falla</option>
+                        <option value="No Enciende">⚫ No Enciende</option>
+                        <option value="Laboratorio">🟣 Laboratorio</option>
+                    </select>
+                </div>
+            </form></div>
+            <div class="modal-footer p-3 bg-light"><button class="btn btn-success w-100 py-2 fw-bold" onclick="saveData()">GUARDAR CAMBIOS</button></div>
+        </div></div>
+    </div>
+
+    <footer class="footer">
+        Derechos Reservados - <b>NSG 2026</b> - Panel Administrado por <b>Franco</b>
     </footer>
 
-    <div class="modal fade" id="reservationModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content shadow-lg border-0">
-                <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title fw-bold">Nueva Reserva</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <form id="resForm">
-                        <input type="hidden" id="fId"> 
-                        <div class="row g-3">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">Fecha</label>
-                                <input type="date" id="fFecha" class="form-control" required>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">Hora</label>
-                                <select id="fHora" class="form-select">
-                                    <option>08:10</option><option>10:00</option><option>11:50</option>
-                                    <option>13:20</option><option>14:05</option><option>15:35</option>
-                                </select>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">Curso</label>
-                                <input type="text" id="fCurso" class="form-control" placeholder="Ej: 2° Medio A">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">Asignatura</label>
-                                <input type="text" id="fAsignatura" class="form-control">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Profesor/a</label>
-                                <input type="text" id="fProfesor" class="form-control">
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label small fw-bold text-primary">Chrome.</label>
-                                <input type="number" id="fChrome" class="form-control" value="0">
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label small fw-bold text-danger">Reempl.</label>
-                                <input type="number" id="fReemp" class="form-control" value="0">
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label small fw-bold text-success">Dev.</label>
-                                <input type="number" id="fDev" class="form-control" value="0">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Estado Inicial</label>
-                                <select id="fObs" class="form-select">
-                                    <option value="Sin novedad">✅ Sin novedad</option>
-                                    <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
-                                    <option value="Teclado Falla">🟠 Teclado Falla</option>
-                                    <option value="No Enciende">⚫ No Enciende</option>
-                                    <option value="Cargador Malo">🔌 Cargador Malo</option>
-                                </select>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-success px-4" onclick="saveReservation()">Guardar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec"; 
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec";
+        let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
 
-        let dbData = [];
-        const months = ["Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        let currentMonthIndex = 0; 
-        let currentWeek = 0; 
-        let year = 2026;
-
-        document.addEventListener('DOMContentLoaded', () => {
-            renderWeeks();
-            loadData();
-        });
-
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        async function load() { 
+            document.getElementById('loading').style.display = 'flex';
+            try {
+                const r = await fetch(SCRIPT_URL); db = await r.json(); 
+                renderAll(); 
+            } catch(e) { console.error("Error cargando datos:", e); }
+            document.getElementById('loading').style.display = 'none';
         }
 
-        function loadData() {
-            showLoading(true);
-            fetch(SCRIPT_URL)
-                .then(res => res.json())
-                .then(data => {
-                    dbData = data;
-                    renderApp();
-                    showLoading(false);
-                })
-                .catch(err => {
-                    console.error(err);
-                    showLoading(false);
-                });
+        function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
+        function setFilterWeek(w) { 
+            currentWeek = w; 
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w));
+            renderAll(); 
         }
+        function setFilterMode(m) { filterMode = m; renderAll(); }
+        function resetApp() { filterMode = 'all'; currentWeek = 0; document.getElementById('searchBox').value = ''; document.getElementById('courseSelect').value = ''; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); renderAll(); }
 
-        function renderApp() {
-            const selectedMonthNum = currentMonthIndex + 3; 
-            const filterC = document.getElementById('filterCurso').value; 
-            const filterP = document.getElementById('filterProfesor').value.toLowerCase();
+        function renderAll() {
+            const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            document.getElementById('displayDate').innerText = `${mNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+            
+            const s = document.getElementById('searchBox').value.toLowerCase();
+            const c = document.getElementById('courseSelect').value;
 
-            let filtered = dbData.filter(item => {
-                const parts = item.fecha.split('-');
-                const itemYear = parseInt(parts[0]);
-                const itemMonth = parseInt(parts[1]);
+            // FILTRO DE DATOS: Asegura que todo respete el mes seleccionado
+            const filtered = db.filter(d => {
+                const date = new Date(d.fecha);
+                const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+                const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
+                const matchC = c === "" || d.curso === c;
                 
-                if (itemYear !== year || itemMonth !== selectedMonthNum) return false;
-                if (currentWeek !== 0 && getWeekNumber(item.fecha) !== currentWeek) return false;
+                let matchW = true;
+                if(currentWeek > 0) {
+                    const day = date.getDate() + 1;
+                    const start = (currentWeek - 1) * 7 + 1;
+                    const end = currentWeek * 7;
+                    matchW = (day >= start && day <= end);
+                }
+
+                let matchF = true;
+                if(filterMode === 'lab') matchF = (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+                if(filterMode === 'reemp') matchF = parseInt(d.reemplazo || 0) > 0;
+                if(filterMode === 'ok') matchF = (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0;
                 
-                // FILTRO EXACTO PARA CURSO
-                if (filterC && item.curso !== filterC) return false;
-                
-                if (filterP && !item.profesor.toLowerCase().includes(filterP)) return false;
-                return true;
+                return matchM && matchS && matchC && matchW && matchF;
             });
 
-            filtered.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+            document.getElementById('tableBody').innerHTML = filtered.map(r => {
+                const isL = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
+                return `<tr class="${isL?'row-lab':''}">
+                    <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
+                    <td><span class="badge bg-light text-dark border">${r.hora}</span></td>
+                    <td>${r.curso}</td><td>${r.asignatura}</td>
+                    <td class="text-start fw-bold" style="color:#2b5797">${r.profesor}</td>
+                    <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
+                    <td class="text-success fw-bold">${r.devueltos}</td>
+                    <td class="small">${isL?'<span class="badge-lab">LABORATORIO</span>':r.observacion}</td>
+                    <td><button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button></td></tr>`;
+            }).join('');
 
-            const tbody = document.getElementById('tableBody');
-            let htmlBuffer = '';
-            if (filtered.length === 0) {
-                htmlBuffer = '<tr><td colspan="10" class="text-muted p-5">No hay registros</td></tr>';
-            } else {
-                filtered.forEach(row => {
-                    htmlBuffer += `
-                        <tr>
-                            <td class="fw-bold text-secondary">${formatDateCL(row.fecha)}</td>
-                            <td><span class="badge bg-light text-dark border">${row.hora}</span></td>
-                            <td>${row.curso}</td>
-                            <td class="text-start">${row.asignatura}</td>
-                            <td class="text-start fw-semibold text-primary">${row.profesor}</td>
-                            <td>${row.chromebooks}</td>
-                            <td class="${row.reemplazo > 0 ? 'text-danger fw-bold' : ''}">${row.reemplazo}</td>
-                            <td class="text-success">${row.devueltos}</td>
-                            <td>
-                                <input type="text" class="quick-edit-input" value="${row.observacion || ''}" 
-                                    onblur="quickUpdateObservation('${row.id}', this.value)" placeholder="...">
-                            </td>
-                            <td>
-                                <div class="btn-group">
-                                    <button class="btn btn-sm btn-outline-warning border-0" onclick="editItem('${row.id}')">✏️</button>
-                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${row.id}')">🗑️</button>
-                                </div>
-                            </td>
-                        </tr>`;
-                });
-            }
-            tbody.innerHTML = htmlBuffer;
-            document.getElementById('totalCount').innerText = `${filtered.length} Registros`;
+            // ACTUALIZACIÓN DE KPIs: Ahora solo cuentan el mes actual
+            const currentMonthData = db.filter(d => {
+                const date = new Date(d.fecha);
+                return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+            });
+
+            const labCount = currentMonthData.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+            const reempCount = currentMonthData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+            const okCount = currentMonthData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+            
+            document.getElementById('kpi-total').innerText = currentMonthData.length;
+            document.getElementById('kpi-lab').innerText = labCount;
+            document.getElementById('kpi-reemp').innerText = reempCount;
+            document.getElementById('kpi-ok').innerText = currentMonthData.length > 0 ? Math.round((okCount / currentMonthData.length) * 100) + "%" : "0%";
+
             updateCharts(filtered);
         }
 
-        function quickUpdateObservation(id, newObservation) {
-            const item = dbData.find(d => d.id.toString() === id.toString());
-            if (!item || item.observacion === newObservation) return; 
-            showLoading(true);
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ ...item, action: "update", observacion: newObservation }) })
-            .then(() => loadData());
-        }
-
-        function saveReservation() {
-            const id = document.getElementById('fId').value;
-            showLoading(true);
-            const payload = {
-                action: id ? "update" : "create",
-                id: id,
-                fecha: document.getElementById('fFecha').value,
-                hora: document.getElementById('fHora').value,
-                curso: document.getElementById('fCurso').value,
-                asignatura: document.getElementById('fAsignatura').value,
-                profesor: document.getElementById('fProfesor').value,
-                chromebooks: document.getElementById('fChrome').value,
-                reemplazo: document.getElementById('fReemp').value,
-                devueltos: document.getElementById('fDev').value,
-                observacion: document.getElementById('fObs').value
-            };
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
-            .then(() => {
-                bootstrap.Modal.getInstance(document.getElementById('reservationModal')).hide();
-                loadData();
+        function updateCharts(data) {
+            const dS = {}, aS = {};
+            data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; aS[d.asignatura] = (aS[d.asignatura]||0)+1; });
+            if(charts.D) charts.D.destroy();
+            charts.D = new Chart(document.getElementById('chartDocente'), { 
+                type: 'bar', 
+                data: { labels: Object.keys(dS), datasets: [{label:'Reservas', data: Object.values(dS), backgroundColor: '#0d6832', borderRadius: 5}]}, 
+                options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}
             });
-        }
-
-        function deleteItem(id) {
-            if(!confirm("¿Eliminar registro?")) return;
-            showLoading(true);
-            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "delete", id: id }) }).then(() => loadData());
-        }
-
-        function openModal() {
-            document.getElementById('resForm').reset();
-            document.getElementById('fId').value = "";
-            new bootstrap.Modal(document.getElementById('reservationModal')).show();
+            if(charts.A) charts.A.destroy();
+            charts.A = new Chart(document.getElementById('chartAsignatura'), { 
+                type: 'bar', 
+                data: { labels: Object.keys(aS), datasets: [{label:'Reservas', data: Object.values(aS), backgroundColor: '#448aff', borderRadius: 5}]}, 
+                options: {maintainAspectRatio: false, plugins:{legend:false}}
+            });
         }
 
         function editItem(id) {
-            const item = dbData.find(d => d.id.toString() === id.toString());
-            if (!item) return;
-            document.getElementById('fId').value = item.id;
-            document.getElementById('fFecha').value = item.fecha;
-            document.getElementById('fHora').value = item.hora;
-            document.getElementById('fCurso').value = item.curso;
-            document.getElementById('fAsignatura').value = item.asignatura;
-            document.getElementById('fProfesor').value = item.profesor;
-            document.getElementById('fChrome').value = item.chromebooks || 0;
-            document.getElementById('fReemp').value = item.reemplazo || 0;
-            document.getElementById('fDev').value = item.devueltos || 0;
-            document.getElementById('fObs').value = item.observacion;
-            new bootstrap.Modal(document.getElementById('reservationModal')).show();
+            const r = db.find(x => x.id.toString() === id.toString());
+            document.getElementById('fId').value = r.id;
+            document.getElementById('fFecha').value = r.fecha;
+            document.getElementById('fHora').value = r.hora;
+            document.getElementById('fCurso').value = r.curso;
+            document.getElementById('fProfesor').value = r.profesor;
+            document.getElementById('fAsignatura').value = r.asignatura;
+            document.getElementById('fChr').value = r.chromebooks;
+            document.getElementById('fRee').value = r.reemplazo;
+            document.getElementById('fDev').value = r.devueltos;
+            document.getElementById('fObs').value = r.observacion;
+            new bootstrap.Modal(document.getElementById('resModal')).show();
         }
 
-        function changeMonth(step) {
-            let newIndex = currentMonthIndex + step;
-            if (newIndex >= 0 && newIndex < months.length) { 
-                currentMonthIndex = newIndex; currentWeek = 0;
-                renderWeeks(); renderApp();
-            }
+        function openModal() { document.getElementById('resForm').reset(); document.getElementById('fId').value = ''; new bootstrap.Modal(document.getElementById('resModal')).show(); }
+
+        async function saveData() {
+            document.getElementById('loading').style.display = 'flex';
+            const payload = {
+                action: document.getElementById('fId').value ? 'update' : 'create',
+                id: document.getElementById('fId').value,
+                fecha: document.getElementById('fFecha').value,
+                hora: document.getElementById('fHora').value,
+                curso: document.getElementById('fCurso').value,
+                profesor: document.getElementById('fProfesor').value,
+                asignatura: document.getElementById('fAsignatura').value,
+                chromebooks: document.getElementById('fChr').value,
+                reemplazo: document.getElementById('fRee').value,
+                devueltos: document.getElementById('fDev').value,
+                observacion: document.getElementById('fObs').value
+            };
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+            load();
         }
 
-        function setWeek(weekNum) { currentWeek = weekNum; renderWeeks(); renderApp(); }
-
-        function renderWeeks() {
-            const container = document.getElementById('weekTabs');
-            let html = `<div class="week-tab ${currentWeek === 0 ? 'active' : ''}" onclick="setWeek(0)">Mes Completo</div>`;
-            for(let i=1; i<=4; i++) html += `<div class="week-tab ${currentWeek === i ? 'active' : ''}" onclick="setWeek(${i})">Semana ${i}</div>`;
-            container.innerHTML = html;
-            document.getElementById('currentMonthLabel').innerText = `${months[currentMonthIndex]} ${year}`;
-        }
-
-        function getWeekNumber(dateString) {
-            const day = parseInt(dateString.split('-')[2]);
-            return day <= 7 ? 1 : day <= 14 ? 2 : day <= 21 ? 3 : 4;
-        }
-
-        function formatDateCL(dateStr) {
-            const p = dateStr.split('-'); return `${p[2]}/${p[1]}`;
-        }
-
-        let chartAsig, chartObs, chartEq, chartDocente;
-
-        function updateCharts(data) {
-            const counts = { asig: {}, obs: {}, docs: {}, equipos: { chr: 0, ree: 0 } };
-            data.forEach(d => {
-                counts.asig[d.asignatura] = (counts.asig[d.asignatura] || 0) + 1;
-                counts.obs[d.observacion] = (counts.obs[d.observacion] || 0) + 1;
-                counts.equipos.chr += parseInt(d.chromebooks || 0);
-                counts.equipos.ree += parseInt(d.reemplazo || 0);
-                if (d.profesor) {
-                    if (!counts.docs[d.profesor]) counts.docs[d.profesor] = { res: 0, fail: 0 };
-                    counts.docs[d.profesor].res += 1;
-                    if (/(dañada|falla|no enciende|malo)/i.test(d.observacion)) counts.docs[d.profesor].fail += 1;
-                }
-            });
-
-            // Chart Docentes
-            const docLabels = Object.keys(counts.docs).sort((a,b) => counts.docs[b].res - counts.docs[a].res);
-            if(chartDocente) chartDocente.destroy();
-            document.getElementById('chartDocenteContainer').style.height = `${Math.max(300, docLabels.length * 35)}px`;
-            chartDocente = new Chart(document.getElementById('chartDocente'), {
-                type: 'bar',
-                data: { labels: docLabels, datasets: [{ label: 'Reservas', data: docLabels.map(l => counts.docs[l].res), backgroundColor: '#107c41' }] },
-                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
-            });
-
-            // Gráfico Asignaturas (BARRAS)
-            if(chartAsig) chartAsig.destroy();
-            chartAsig = new Chart(document.getElementById('chartAsignatura'), {
-                type: 'bar',
-                data: { labels: Object.keys(counts.asig), datasets: [{ label: 'Reservas', data: Object.values(counts.asig), backgroundColor: '#4285f4' }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            // Gráfico Equipos (BARRAS)
-            if(chartEq) chartEq.destroy();
-            chartEq = new Chart(document.getElementById('chartEquipos'), {
-                type: 'bar',
-                data: { labels: ['Chromebooks', 'Reemplazos'], datasets: [{ label: 'Cantidad', data: [counts.equipos.chr, counts.equipos.ree], backgroundColor: ['#107c41', '#db4437'] }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            // Gráfico Observaciones
-            if(chartObs) chartObs.destroy();
-            chartObs = new Chart(document.getElementById('chartObservaciones'), {
-                type: 'bar',
-                data: { labels: Object.keys(counts.obs), datasets: [{ data: Object.values(counts.obs), backgroundColor: '#ffc107' }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
-        }
+        window.onload = load;
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
