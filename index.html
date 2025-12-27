@@ -31,7 +31,7 @@
         .kpi-card h6 { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
         .kpi-card div { font-size: 2.2rem; font-weight: 900; }
 
-        .main-grid { display: grid; grid-template-columns: 1fr 350px; gap: 25px; padding: 0 25px 40px 25px; }
+        .main-grid { display: grid; grid-template-columns: 1fr 350px; gap: 25px; padding: 0 25px 20px 25px; }
         @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
 
         .content-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); height: 100%; }
@@ -45,7 +45,6 @@
         .row-damaged { border-left: 6px solid var(--danger-red) !important; background-color: #fff5f5 !important; }
         
         .badge-status { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
-        .badge-damaged { background-color: var(--danger-red); color: white; }
         
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
         .footer { text-align: center; padding: 20px; border-top: 1px solid #ddd; background: white; margin-top: 20px; color: #999; }
@@ -170,6 +169,15 @@
                 </div>
             </div>
         </div>
+
+        <div class="px-4 mt-4">
+            <div class="content-card shadow-sm border-0">
+                <h5 class="fw-bold text-success mb-4">📈 Resumen de Rendimiento Anual 2026</h5>
+                <div style="height: 300px; width: 100%;">
+                    <canvas id="chartAnual"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="resModal" tabindex="-1">
@@ -218,13 +226,15 @@
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec";
-        let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {}; // 2 es Marzo
+        let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
+        const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
         async function load() { 
             document.getElementById('loading').style.display = 'flex';
             try {
                 const r = await fetch(SCRIPT_URL); db = await r.json(); 
                 renderAll(); 
+                renderAnualChart(); 
             } catch(e) { console.error("Error cargando datos:", e); }
             document.getElementById('loading').style.display = 'none';
         }
@@ -292,29 +302,23 @@
         }
 
         function renderAll() {
-            const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
             document.getElementById('displayDate').innerText = `${mNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
-            
             const s = document.getElementById('searchBox').value.toLowerCase();
             const c = document.getElementById('courseSelect').value;
 
-            // 1. Filtrar primero por el mes y año que Franco está viendo
             const baseFiltered = db.filter(d => {
-                const date = new Date(d.fecha + "T00:00:00"); // Fix zona horaria
+                const date = new Date(d.fecha + "T00:00:00");
                 const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
                 const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
                 const matchC = c === "" || d.curso === c;
                 let matchW = true;
                 if(currentWeek > 0) {
                     const day = date.getDate();
-                    const start = (currentWeek - 1) * 7 + 1;
-                    const end = currentWeek * 7;
-                    matchW = (day >= start && day <= end);
+                    matchW = (day >= (currentWeek - 1) * 7 + 1 && day <= currentWeek * 7);
                 }
                 return matchM && matchS && matchC && matchW;
             });
 
-            // 2. Aplicar los modos de filtro específicos
             const finalFiltered = baseFiltered.filter(d => {
                 const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
                 const isDebt = totalOut > parseInt(d.devueltos || 0);
@@ -329,18 +333,13 @@
                 return true;
             });
 
-            // 3. Renderizar Tabla
             document.getElementById('tableBody').innerHTML = finalFiltered.map(r => {
                 const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
                 const isOK = totalOut === parseInt(r.devueltos);
                 const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
                 const isLab = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
                 
-                let rowClass = "";
-                if(isDamaged) rowClass = "row-damaged";
-                else if(isLab) rowClass = "row-lab";
-                else if(!isOK) rowClass = "row-pending";
-
+                let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
                 let badgeStyle = `background:${isOK ? '#198754' : '#ffc107'}; color:${isOK ? 'white' : '#444'}`;
                 if(isDamaged) badgeStyle = `background:var(--danger-red); color:white`;
                 else if(isLab) badgeStyle = `background:var(--purple-lab); color:white`;
@@ -352,73 +351,81 @@
                     <td class="text-start fw-bold" style="color:#2b5797">${r.profesor}</td>
                     <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                     <td class="text-success fw-bold">${r.devueltos}</td>
-                    <td>
-                        <span class="badge badge-status" style="${badgeStyle}">
-                            ${isDamaged ? r.observacion : (isLab ? 'LABORATORIO' : (isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE'))}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="d-flex justify-content-center gap-1">
-                            <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button>
-                            <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')">🗑️</button>
-                        </div>
-                    </td></tr>`;
+                    <td><span class="badge badge-status" style="${badgeStyle}">${isDamaged ? r.observacion : (isLab ? 'LABORATORIO' : (isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE'))}</span></td>
+                    <td><div class="d-flex justify-content-center gap-1">
+                        <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button>
+                        <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')">🗑️</button>
+                    </div></td></tr>`;
             }).join('');
 
-            // 4. CORRECCIÓN DEL BANNER: Ahora detecta deudas del mes actual filtrado
-            const currentDebts = baseFiltered.filter(d => {
-                const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
-                const dev = parseInt(d.devueltos || 0);
-                return total > dev && !d.observacion.toLowerCase().includes("dañada");
-            });
-
+            const currentDebts = baseFiltered.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !d.observacion.toLowerCase().includes("dañada"));
             const banner = document.getElementById('debtBanner');
             if(currentDebts.length > 0) {
                 banner.style.display = 'block';
-                document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos con devolución incompleta en ${mNames[viewDate.getMonth()]}.`;
-            } else { 
-                banner.style.display = 'none'; 
-            }
+                document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos pendientes en ${mNames[viewDate.getMonth()]}.`;
+            } else banner.style.display = 'none';
 
-            // 5. Actualizar KPIs
-            const labCount = baseFiltered.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
-            const reempCount = baseFiltered.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-            const okCount = baseFiltered.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-            const damagedCount = baseFiltered.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
-            
-            document.getElementById('kpi-total').innerText = baseFiltered.length;
-            document.getElementById('kpi-lab').innerText = labCount;
-            document.getElementById('kpi-reemp').innerText = reempCount;
-            document.getElementById('kpi-damaged').innerText = damagedCount;
-            document.getElementById('kpi-ok').innerText = baseFiltered.length > 0 ? Math.round((okCount / baseFiltered.length) * 100) + "%" : "0%";
-
+            updateKPIs(baseFiltered);
             updateCharts(finalFiltered, baseFiltered);
         }
 
+        function updateKPIs(base) {
+            const lab = base.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+            const reemp = base.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+            const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+            const dmg = base.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
+            
+            document.getElementById('kpi-total').innerText = base.length;
+            document.getElementById('kpi-lab').innerText = lab;
+            document.getElementById('kpi-reemp').innerText = reemp;
+            document.getElementById('kpi-damaged').innerText = dmg;
+            document.getElementById('kpi-ok').innerText = base.length > 0 ? Math.round((ok / base.length) * 100) + "%" : "0%";
+        }
+
         function updateCharts(data, base) {
-            const dS = {};
-            data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; });
+            const dS = {}; data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; });
             if(charts.D) charts.D.destroy();
-            charts.D = new Chart(document.getElementById('chartDocente'), { 
-                type: 'bar', 
-                data: { labels: Object.keys(dS), datasets: [{label:'Reservas', data: Object.values(dS), backgroundColor: '#0d6832', borderRadius: 5}]}, 
-                options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}
-            });
+            charts.D = new Chart(document.getElementById('chartDocente'), { type: 'bar', data: { labels: Object.keys(dS), datasets: [{data: Object.values(dS), backgroundColor: '#0d6832', borderRadius: 5}]}, options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}});
 
             const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
             const pending = base.length - ok;
             if(charts.S) charts.S.destroy();
-            charts.S = new Chart(document.getElementById('chartStatus'), {
-                type: 'doughnut',
+            charts.S = new Chart(document.getElementById('chartStatus'), { type: 'doughnut', data: { labels: ['OK', 'Pendiente'], datasets: [{ data: [ok, pending], backgroundColor: ['#198754', '#ffc107'], borderWidth: 0 }]}, options: { maintainAspectRatio: false, cutout: '70%' }});
+        }
+
+        function renderAnualChart() {
+            const usageTotal = new Array(12).fill(0), replacements = new Array(12).fill(0), damaged = new Array(12).fill(0);
+            
+            db.forEach(d => {
+                const dt = new Date(d.fecha + "T00:00:00");
+                if(dt.getFullYear() === 2026) {
+                    const m = dt.getMonth();
+                    usageTotal[m]++;
+                    if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
+                    if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
+                }
+            });
+
+            if(charts.A) charts.A.destroy();
+            charts.A = new Chart(document.getElementById('chartAnual'), {
+                type: 'line',
                 data: {
-                    labels: ['Devueltos OK', 'Diferencia'],
-                    datasets: [{
-                        data: [ok, pending],
-                        backgroundColor: ['#198754', '#ffc107'],
-                        borderWidth: 0
-                    }]
+                    labels: mNames.map(m => m.slice(0,3)),
+                    datasets: [
+                        { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
+                        { label: 'Uso Reemplazos', data: replacements, borderColor: '#f39c12', backgroundColor: '#f39c12', tension: 0.3, fill: false, borderDash: [5, 5] },
+                        { label: 'Equipos Dañados', data: damaged, borderColor: '#dc3545', backgroundColor: '#dc3545', tension: 0.3, fill: false, borderWidth: 2 }
+                    ]
                 },
-                options: { maintainAspectRatio: false, cutout: '70%' }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'bottom' },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } }
+                }
             });
         }
 
@@ -428,7 +435,7 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `Gestion_Franco_${new Date().toLocaleDateString()}.csv`);
+            link.setAttribute("download", `Gestion_Franco_2026.csv`);
             link.click();
         }
 
@@ -454,10 +461,7 @@
             try {
                 await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
                 load();
-            } catch(e) { 
-                alert("Error al eliminar"); 
-                document.getElementById('loading').style.display = 'none';
-            }
+            } catch(e) { alert("Error al eliminar"); document.getElementById('loading').style.display = 'none'; }
         }
 
         function openModal() { 
@@ -489,10 +493,7 @@
                 localStorage.removeItem('franco_draft');
                 bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
                 load();
-            } catch(e) {
-                alert("Error al guardar");
-                document.getElementById('loading').style.display = 'none';
-            }
+            } catch(e) { alert("Error al guardar"); document.getElementById('loading').style.display = 'none'; }
         }
 
         window.onload = load;
