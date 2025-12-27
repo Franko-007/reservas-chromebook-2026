@@ -7,9 +7,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; }
+        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --transition: all 0.3s ease; }
         body { background-color: var(--bg-light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; }
         
+        /* Animaciones suaves */
+        .kpi-card, .btn, .tab-btn, tr { transition: var(--transition); }
+
         .header-main { background-color: #0d6832; color: white; padding: 15px 25px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .header-icon { width: 45px; height: 45px; }
         .header-titles h1 { font-size: 1.6rem; margin: 0; font-weight: bold; letter-spacing: 0.5px; }
@@ -18,30 +21,36 @@
         .action-bar { background: white; padding: 10px 25px; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; position: sticky; top: 0; z-index: 1000; }
 
         .month-selector { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 25px 0; }
-        .nav-btn { background: #0d6832; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .nav-btn { background: #0d6832; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .nav-btn:hover { background: #0a5227; transform: scale(1.1); }
         
-        .week-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; }
-        .tab-btn { background: white; border: 1px solid #ddd; border-radius: 25px; padding: 8px 20px; font-size: 0.9rem; cursor: pointer; transition: 0.3s; font-weight: 500; }
+        .week-tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
+        .tab-btn { background: white; border: 1px solid #ddd; border-radius: 25px; padding: 8px 20px; font-size: 0.9rem; cursor: pointer; font-weight: 500; }
         .tab-btn.active { background: #0d6832; color: white; border-color: #0d6832; box-shadow: 0 4px 8px rgba(13, 104, 50, 0.3); }
 
-        .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; padding: 0 25px; }
-        .kpi-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); cursor: pointer; transition: 0.3s; border: 1px solid transparent; }
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; padding: 0 25px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid transparent; }
         .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); border-color: #0d6832; }
         .kpi-card h6 { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
         .kpi-card div { font-size: 2.2rem; font-weight: 900; }
 
-        .main-grid { display: grid; grid-template-columns: 1fr 400px; gap: 25px; padding: 0 25px 40px 25px; }
-        .content-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .chart-box { height: 280px; width: 100%; margin-top: 15px; }
+        .main-grid { display: grid; grid-template-columns: 1fr 350px; gap: 25px; padding: 0 25px 40px 25px; }
+        @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
 
-        .table-res { overflow-y: auto; max-height: 650px; border-radius: 8px; }
-        thead th { background-color: #f8f9fa !important; color: #555; text-transform: uppercase; font-size: 0.7rem; padding: 12px !important; border-bottom: 2px solid #eee; }
+        .content-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); height: 100%; }
+        .chart-box { height: 250px; width: 100%; margin-top: 15px; }
+
+        .table-res { overflow-y: auto; max-height: 600px; border-radius: 8px; border: 1px solid #eee; }
+        thead th { background-color: #f8f9fa !important; color: #555; text-transform: uppercase; font-size: 0.7rem; padding: 12px !important; border-bottom: 2px solid #eee; position: sticky; top: 0; z-index: 10; }
+        
         .row-lab { background-color: #fcfaff !important; border-left: 6px solid var(--purple-lab) !important; }
-        .badge-lab { background: var(--purple-lab); color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.7rem; }
+        .badge-status { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
         
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
         .footer { text-align: center; padding: 20px; border-top: 1px solid #ddd; background: white; margin-top: 20px; color: #999; }
+        
+        /* Alerta de validación en modal */
+        .val-warning { background-color: #fff3cd !important; border-color: #ffecb5 !important; }
     </style>
 </head>
 <body>
@@ -60,9 +69,10 @@
     </div>
 
     <div class="action-bar">
+        <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="exportCSV()">📊 CSV</button>
         <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="window.print()">🖨️ IMPRIMIR</button>
         <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
-        <button class="btn btn-warning btn-sm fw-bold px-3" onclick="openModal()">+ NUEVA RESERVA</button>
+        <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
     </div>
 
     <div class="container-fluid">
@@ -82,19 +92,19 @@
 
         <div class="kpi-row">
             <div class="kpi-card" onclick="resetApp()">
-                <h6>Préstamos</h6>
+                <h6>Total Préstamos</h6>
                 <div id="kpi-total" style="color: #107c41">0</div>
             </div>
             <div class="kpi-card" onclick="setFilterMode('lab')">
-                <h6>Laboratorio</h6>
-                <div id="kpi-lab" style="color: #0b5c2f">0</div>
+                <h6>En Laboratorio</h6>
+                <div id="kpi-lab" style="color: #6f42c1">0</div>
             </div>
             <div class="kpi-card" onclick="setFilterMode('reemp')">
-                <h6>Reemplazos</h6>
+                <h6>Uso Reemplazos</h6>
                 <div id="kpi-reemp" style="color: #dc3545">0</div>
             </div>
             <div class="kpi-card" onclick="setFilterMode('ok')">
-                <h6>Retorno OK</h6>
+                <h6>Tasa Retorno OK</h6>
                 <div id="kpi-ok" style="color: #198754">0%</div>
             </div>
         </div>
@@ -103,11 +113,11 @@
             <div class="content-card">
                 <div class="row g-2 mb-4">
                     <div class="col-md-7">
-                        <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="renderAll()">
+                        <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="renderAll()">
                     </div>
                     <div class="col-md-5">
-                        <select id="courseSelect" class="form-select form-select-lg shadow-sm" style="font-size: 0.9rem;" onchange="renderAll()">
-                            <option value="">Cursos (Todos)</option>
+                        <select id="courseSelect" class="form-select form-select-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" onchange="renderAll()">
+                            <option value="">Todos los Cursos</option>
                             <optgroup label="Básica">
                                 <option value="1° A">1° A</option><option value="1° B">1° B</option>
                                 <option value="2° A">2° A</option><option value="2° B">2° B</option>
@@ -129,10 +139,10 @@
                 </div>
 
                 <div class="table-res">
-                    <table class="table table-hover align-middle text-center">
+                    <table class="table table-hover align-middle text-center mb-0">
                         <thead>
                             <tr>
-                                <th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Observación</th><th>Acción</th>
+                                <th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Estado/Obs</th><th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody"></tbody>
@@ -140,55 +150,61 @@
                 </div>
             </div>
 
-            <div>
-                <div class="content-card mb-4">
-                    <h6 class="fw-bold mb-0 text-muted">Estadísticas por Docente</h6>
+            <div class="d-flex flex-column gap-4">
+                <div class="content-card">
+                    <h6 class="fw-bold mb-3 text-muted">Préstamos por Docente</h6>
                     <div class="chart-box"><canvas id="chartDocente"></canvas></div>
                 </div>
                 <div class="content-card">
-                    <h6 class="fw-bold mb-0 text-muted">Uso por Asignatura</h6>
-                    <div class="chart-box"><canvas id="chartAsignatura"></canvas></div>
+                    <h6 class="fw-bold mb-3 text-muted">Estado General Equipos</h6>
+                    <div class="chart-box"><canvas id="chartStatus"></canvas></div>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="modal fade" id="resModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
-            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">EDITAR REGISTRO</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body p-4"><form id="resForm" class="row g-3">
-                <input type="hidden" id="fId">
-                <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control"></div>
-                <div class="col-md-6"><label class="fw-bold small text-muted">BLOQUE</label>
-                    <select id="fHora" class="form-select">
-                        <option value="08:10">08:10</option><option value="10:00">10:00</option>
-                        <option value="11:50">11:50</option><option value="14:00">14:00</option>
-                    </select>
-                </div>
-                <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control"></div>
-                <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control"></div>
-                <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control"></div>
-                
-                <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light"></div>
-                <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light"></div>
-                <div class="col-md-4"><label class="fw-bold small text-success">DEVUELTOS</label><input type="number" id="fDev" class="form-control bg-light"></div>
-                
-                <div class="col-12"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
-                    <select id="fObs" class="form-select border-primary">
-                        <option value="Sin novedad">✅ Sin novedad</option>
-                        <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
-                        <option value="Teclado Falla">🟠 Teclado Falla</option>
-                        <option value="No Enciende">⚫ No Enciende</option>
-                        <option value="Laboratorio">🟣 Laboratorio</option>
-                    </select>
-                </div>
-            </form></div>
-            <div class="modal-footer p-3 bg-light"><button class="btn btn-success w-100 py-2 fw-bold" onclick="saveData()">GUARDAR CAMBIOS</button></div>
+        <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">📝 REGISTRO DE RESERVA</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-4">
+                <form id="resForm" class="row g-3">
+                    <input type="hidden" id="fId">
+                    <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control"></div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">BLOQUE</label>
+                        <select id="fHora" class="form-select">
+                            <option value="08:10">08:10</option><option value="10:00">10:00</option>
+                            <option value="11:50">11:50</option><option value="14:00">14:00</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control" placeholder="Ej: 7° A"></div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática"></div>
+                    <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control" placeholder="Nombre completo"></div>
+                    
+                    <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()"></div>
+                    <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts()"></div>
+                    <div class="col-md-4">
+                        <label class="fw-bold small text-success">DEVUELTOS</label>
+                        <input type="number" id="fDev" class="form-control" oninput="validateCounts()">
+                        <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
+                    </div>
+                    
+                    <div class="col-12"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
+                        <select id="fObs" class="form-select border-primary shadow-sm">
+                            <option value="Sin novedad">✅ Sin novedad</option>
+                            <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
+                            <option value="Teclado Falla">🟠 Teclado Falla</option>
+                            <option value="No Enciende">⚫ No Enciende</option>
+                            <option value="Laboratorio">🟣 Laboratorio</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer p-3 bg-light"><button class="btn btn-success w-100 py-3 fw-bold shadow" onclick="saveData()">GUARDAR CAMBIOS EN GOOGLE SHEETS</button></div>
         </div></div>
     </div>
 
     <footer class="footer">
-        Derechos Reservados - <b>NSG 2026</b> - Panel Administrado por <b>Franco</b>
+        © NSG 2026 - <b>Derechos Reservados</b> - Creado por Franco
     </footer>
 
     <script>
@@ -202,6 +218,23 @@
                 renderAll(); 
             } catch(e) { console.error("Error cargando datos:", e); }
             document.getElementById('loading').style.display = 'none';
+        }
+
+        // VALIDACIÓN DE CONTEO EN MODAL
+        function validateCounts() {
+            const chr = parseInt(document.getElementById('fChr').value || 0);
+            const ree = parseInt(document.getElementById('fRee').value || 0);
+            const dev = parseInt(document.getElementById('fDev').value || 0);
+            const inputDev = document.getElementById('fDev');
+            const msg = document.getElementById('valMsg');
+            
+            if(dev !== (chr + ree)) {
+                inputDev.classList.add('val-warning');
+                msg.style.display = 'block';
+            } else {
+                inputDev.classList.remove('val-warning');
+                msg.style.display = 'none';
+            }
         }
 
         function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
@@ -230,13 +263,11 @@
             const s = document.getElementById('searchBox').value.toLowerCase();
             const c = document.getElementById('courseSelect').value;
 
-            // 1. FILTRADO BASE (MES + SEMANA + BUSQUEDA + CURSO)
             const baseFiltered = db.filter(d => {
                 const date = new Date(d.fecha);
                 const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
                 const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
                 const matchC = c === "" || d.curso === c;
-                
                 let matchW = true;
                 if(currentWeek > 0) {
                     const day = date.getDate() + 1;
@@ -247,7 +278,6 @@
                 return matchM && matchS && matchC && matchW;
             });
 
-            // 2. FILTRADO POR MODO (KPIs Seleccionados)
             const finalFiltered = baseFiltered.filter(d => {
                 if(filterMode === 'lab') return (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
                 if(filterMode === 'reemp') return parseInt(d.reemplazo || 0) > 0;
@@ -255,9 +285,15 @@
                 return true;
             });
 
-            // RENDERIZAR TABLA
             document.getElementById('tableBody').innerHTML = finalFiltered.map(r => {
                 const isL = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
+                const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
+                const isOK = totalOut === parseInt(r.devueltos);
+                
+                let badgeClass = "bg-success text-white";
+                if(!isOK) badgeClass = "bg-danger text-white";
+                if(isL) badgeClass = "bg-purple-lab";
+
                 return `<tr class="${isL?'row-lab':''}">
                     <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
                     <td><span class="badge bg-light text-dark border">${r.hora}</span></td>
@@ -265,7 +301,10 @@
                     <td class="text-start fw-bold" style="color:#2b5797">${r.profesor}</td>
                     <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                     <td class="text-success fw-bold">${r.devueltos}</td>
-                    <td class="small">${isL?'<span class="badge-lab">LABORATORIO</span>':r.observacion}</td>
+                    <td>
+                        ${isL ? '<span class="badge badge-status" style="background:var(--purple-lab); color:white">LABORATORIO</span>' : 
+                        `<span class="badge badge-status ${isOK?'bg-success':'bg-warning text-dark'}">${r.observacion}</span>`}
+                    </td>
                     <td>
                         <div class="d-flex justify-content-center gap-1">
                             <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')">✏️</button>
@@ -274,8 +313,6 @@
                     </td></tr>`;
             }).join('');
 
-            // ACTUALIZACIÓN DE RECUADROS (KPIs) USANDO EL FILTRO SEMANAL
-            // Usamos baseFiltered para que los números cambien según la semana y el mes
             const labCount = baseFiltered.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
             const reempCount = baseFiltered.filter(d => parseInt(d.reemplazo || 0) > 0).length;
             const okCount = baseFiltered.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
@@ -285,24 +322,51 @@
             document.getElementById('kpi-reemp').innerText = reempCount;
             document.getElementById('kpi-ok').innerText = baseFiltered.length > 0 ? Math.round((okCount / baseFiltered.length) * 100) + "%" : "0%";
 
-            updateCharts(finalFiltered);
+            updateCharts(finalFiltered, baseFiltered);
         }
 
-        function updateCharts(data) {
-            const dS = {}, aS = {};
-            data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; aS[d.asignatura] = (aS[d.asignatura]||0)+1; });
+        function updateCharts(data, base) {
+            // Chart Docente (Barras Horizontales)
+            const dS = {};
+            data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; });
+            
             if(charts.D) charts.D.destroy();
             charts.D = new Chart(document.getElementById('chartDocente'), { 
                 type: 'bar', 
                 data: { labels: Object.keys(dS), datasets: [{label:'Reservas', data: Object.values(dS), backgroundColor: '#0d6832', borderRadius: 5}]}, 
                 options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}
             });
-            if(charts.A) charts.A.destroy();
-            charts.A = new Chart(document.getElementById('chartAsignatura'), { 
-                type: 'bar', 
-                data: { labels: Object.keys(aS), datasets: [{label:'Reservas', data: Object.values(aS), backgroundColor: '#448aff', borderRadius: 5}]}, 
-                options: {maintainAspectRatio: false, plugins:{legend:false}}
+
+            // Chart Estado (Dona)
+            const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
+            const pending = base.length - ok;
+
+            if(charts.S) charts.S.destroy();
+            charts.S = new Chart(document.getElementById('chartStatus'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Devueltos OK', 'Pendientes/Diferencia'],
+                    datasets: [{
+                        data: [ok, pending],
+                        backgroundColor: ['#198754', '#ffc107'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { maintainAspectRatio: false, cutout: '70%' }
             });
+        }
+
+        // FUNCIÓN PARA EXPORTAR CSV
+        function exportCSV() {
+            let csv = "Fecha,Bloque,Curso,Asignatura,Profesor,Chr,Reemp,Dev,Obs\n";
+            db.forEach(r => {
+                csv += `${r.fecha},${r.hora},${r.curso},${r.asignatura},${r.profesor},${r.chromebooks},${r.reemplazo},${r.devueltos},${r.observacion}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `Gestion_Franco_${new Date().toLocaleDateString()}.csv`);
+            link.click();
         }
 
         function editItem(id) {
@@ -317,6 +381,7 @@
             document.getElementById('fRee').value = r.reemplazo;
             document.getElementById('fDev').value = r.devueltos;
             document.getElementById('fObs').value = r.observacion;
+            validateCounts();
             new bootstrap.Modal(document.getElementById('resModal')).show();
         }
 
@@ -332,7 +397,13 @@
             }
         }
 
-        function openModal() { document.getElementById('resForm').reset(); document.getElementById('fId').value = ''; new bootstrap.Modal(document.getElementById('resModal')).show(); }
+        function openModal() { 
+            document.getElementById('resForm').reset(); 
+            document.getElementById('fId').value = ''; 
+            document.getElementById('valMsg').style.display = 'none';
+            document.getElementById('fDev').classList.remove('val-warning');
+            new bootstrap.Modal(document.getElementById('resModal')).show(); 
+        }
 
         async function saveData() {
             document.getElementById('loading').style.display = 'flex';
