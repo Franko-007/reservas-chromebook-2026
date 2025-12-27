@@ -6,6 +6,9 @@
     <title>Gestión Chromebooks 2026 - Franco</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
     <style>
         :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --danger-red: #d32f2f; --transition: all 0.3s ease; }
         body { background-color: var(--bg-light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; }
@@ -68,7 +71,7 @@
     </div>
 
     <div class="action-bar">
-        <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="exportCSV()">📊 CSV</button>
+        <button class="btn btn-danger btn-sm fw-bold px-3" onclick="generatePDF()">📄 REPORTE PDF</button>
         <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="window.print()">🖨️ IMPRIMIR</button>
         <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
         <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
@@ -239,6 +242,69 @@
             document.getElementById('loading').style.display = 'none';
         }
 
+        // --- FUNCIÓN DE REPORTE PDF AGREGADA ---
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const mesActual = mNames[viewDate.getMonth()];
+            const anioActual = viewDate.getFullYear();
+
+            // Filtrar datos solo del mes visible
+            const mesData = db.filter(d => {
+                const date = new Date(d.fecha + "T00:00:00");
+                return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+            });
+
+            // 1. Título
+            doc.setFontSize(18);
+            doc.setTextColor(11, 92, 47);
+            doc.text(`Reporte de Gestión Chromebooks - ${mesActual} ${anioActual}`, 14, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generado por Franco - Técnico Informático`, 14, 28);
+
+            // 2. KPI Total
+            doc.setFontSize(12);
+            doc.setTextColor(0);
+            doc.text(`Total de Préstamos del Mes: ${mesData.length}`, 14, 40);
+
+            // 3. TOP 20 DOCENTES
+            const docentesMap = {};
+            mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
+            const topDocentes = Object.entries(docentesMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 20);
+
+            doc.autoTable({
+                startY: 45,
+                head: [['#', 'Docente', 'Cant. Préstamos']],
+                body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
+                headStyles: { fillStyle: [13, 104, 50] },
+                margin: { top: 45 }
+            });
+
+            // 4. TOP 20 EQUIPOS DAÑADOS
+            // Filtrar daños y agrupar por observación técnica o detalle si existe
+            const dañadosData = mesData.filter(d => 
+                d.observacion.toLowerCase().includes("dañada") || 
+                d.observacion.toLowerCase().includes("dañado") || 
+                d.observacion.toLowerCase().includes("falla") ||
+                d.observacion.toLowerCase().includes("enciende")
+            ).slice(0, 20);
+
+            doc.text("Top 20 Reportes de Equipos con Fallas/Daños", 14, doc.lastAutoTable.finalY + 15);
+            
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 20,
+                head: [['Fecha', 'Curso', 'Profesor', 'Observación']],
+                body: dañadosData.map(d => [d.fecha, d.curso, d.profesor, d.observacion]),
+                headStyles: { fillStyle: [211, 47, 47] }
+            });
+
+            doc.save(`Reporte_Chromebooks_${mesActual}_${anioActual}.pdf`);
+        }
+
         function saveDraft() {
             if(document.getElementById('fId').value !== "") return;
             const draft = {
@@ -394,7 +460,7 @@
         }
 
         function renderAnualChart() {
-            const usageTotal = new Array(12).fill(0), replacements = new Array(12).fill(0), damaged = new Array(12).fill(0);
+            const usageTotal = new Array(12).fill(0), replacements = new Array(12).fill(0), damaged = new Array(12).fill(0), labs = new Array(12).fill(0);
             
             db.forEach(d => {
                 const dt = new Date(d.fecha + "T00:00:00");
@@ -403,6 +469,7 @@
                     usageTotal[m]++;
                     if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
                     if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
+                    if((d.asignatura + d.observacion).toLowerCase().includes("laboratorio")) labs[m]++;
                 }
             });
 
@@ -413,6 +480,7 @@
                     labels: mNames.map(m => m.slice(0,3)),
                     datasets: [
                         { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
+                        { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 },
                         { label: 'Uso Reemplazos', data: replacements, borderColor: '#f39c12', backgroundColor: '#f39c12', tension: 0.3, fill: false, borderDash: [5, 5] },
                         { label: 'Equipos Dañados', data: damaged, borderColor: '#dc3545', backgroundColor: '#dc3545', tension: 0.3, fill: false, borderWidth: 2 }
                     ]
@@ -427,16 +495,6 @@
                     scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } }
                 }
             });
-        }
-
-        function exportCSV() {
-            let csv = "Fecha,Bloque,Curso,Asignatura,Profesor,Chr,Reemp,Dev,Obs\n";
-            db.forEach(r => { csv += `${r.fecha},${r.hora},${r.curso},${r.asignatura},${r.profesor},${r.chromebooks},${r.reemplazo},${r.devueltos},${r.observacion}\n`; });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `Gestion_Franco_2026.csv`);
-            link.click();
         }
 
         function editItem(id) {
