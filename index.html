@@ -7,19 +7,16 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --transition: all 0.3s ease; }
+        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --danger-red: #d32f2f; --transition: all 0.3s ease; }
         body { background-color: var(--bg-light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; }
         
-        /* Animaciones suaves */
         .kpi-card, .btn, .tab-btn, tr { transition: var(--transition); }
-
         .header-main { background-color: #0d6832; color: white; padding: 15px 25px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .header-icon { width: 45px; height: 45px; }
         .header-titles h1 { font-size: 1.6rem; margin: 0; font-weight: bold; letter-spacing: 0.5px; }
         .header-titles p { font-size: 0.9rem; margin: 0; opacity: 0.9; }
 
         .action-bar { background: white; padding: 10px 25px; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; position: sticky; top: 0; z-index: 1000; }
-
         .month-selector { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 25px 0; }
         .nav-btn { background: #0d6832; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .nav-btn:hover { background: #0a5227; transform: scale(1.1); }
@@ -28,7 +25,7 @@
         .tab-btn { background: white; border: 1px solid #ddd; border-radius: 25px; padding: 8px 20px; font-size: 0.9rem; cursor: pointer; font-weight: 500; }
         .tab-btn.active { background: #0d6832; color: white; border-color: #0d6832; box-shadow: 0 4px 8px rgba(13, 104, 50, 0.3); }
 
-        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; padding: 0 25px; }
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; padding: 0 25px; }
         .kpi-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid transparent; }
         .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); border-color: #0d6832; }
         .kpi-card h6 { font-size: 0.75rem; color: #7f8c8d; text-transform: uppercase; margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
@@ -44,13 +41,16 @@
         thead th { background-color: #f8f9fa !important; color: #555; text-transform: uppercase; font-size: 0.7rem; padding: 12px !important; border-bottom: 2px solid #eee; position: sticky; top: 0; z-index: 10; }
         
         .row-lab { background-color: #fcfaff !important; border-left: 6px solid var(--purple-lab) !important; }
+        .row-pending { border-left: 6px solid #ffc107 !important; background-color: #fffdf5 !important; }
+        .row-damaged { border-left: 6px solid var(--danger-red) !important; background-color: #fff5f5 !important; }
+        
         .badge-status { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+        .badge-damaged { background-color: var(--danger-red); color: white; }
         
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; }
         .footer { text-align: center; padding: 20px; border-top: 1px solid #ddd; background: white; margin-top: 20px; color: #999; }
-        
-        /* Alerta de validación en modal */
         .val-warning { background-color: #fff3cd !important; border-color: #ffecb5 !important; }
+        .alert-banner { display: none; background: #fff3cd; border: 1px solid #ffeeba; padding: 10px 20px; border-radius: 10px; margin-bottom: 20px; color: #856404; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -78,7 +78,7 @@
     <div class="container-fluid">
         <div class="month-selector">
             <button class="nav-btn" onclick="moveMonth(-1)">❮</button>
-            <h2 class="m-0 fw-bold" id="displayDate" style="min-width: 250px; text-align: center; color: #2c3e50;">Marzo 2026</h2>
+            <h2 class="m-0 fw-bold" id="displayDate" style="min-width: 250px; text-align: center; color: #2c3e50;">Cargando...</h2>
             <button class="nav-btn" onclick="moveMonth(1)">❯</button>
         </div>
 
@@ -107,6 +107,15 @@
                 <h6>Tasa Retorno OK</h6>
                 <div id="kpi-ok" style="color: #198754">0%</div>
             </div>
+            <div class="kpi-card" onclick="setFilterMode('damaged')">
+                <h6>Dañados</h6>
+                <div id="kpi-damaged" style="color: var(--danger-red)">0</div>
+            </div>
+        </div>
+
+        <div id="debtBanner" class="alert-banner mx-4 shadow-sm">
+            <span id="debtText">⚠️ Cargando alertas...</span>
+            <button class="btn btn-sm btn-warning ms-3 fw-bold" onclick="setFilterMode('debt')">Ver Pendientes</button>
         </div>
 
         <div class="main-grid">
@@ -169,16 +178,16 @@
             <div class="modal-body p-4">
                 <form id="resForm" class="row g-3">
                     <input type="hidden" id="fId">
-                    <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control"></div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control" onchange="saveDraft()"></div>
                     <div class="col-md-6"><label class="fw-bold small text-muted">BLOQUE</label>
-                        <select id="fHora" class="form-select">
+                        <select id="fHora" class="form-select" onchange="saveDraft()">
                             <option value="08:10">08:10</option><option value="10:00">10:00</option>
                             <option value="11:50">11:50</option><option value="14:00">14:00</option>
                         </select>
                     </div>
-                    <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control" placeholder="Ej: 7° A"></div>
-                    <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática"></div>
-                    <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control" placeholder="Nombre completo"></div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control" placeholder="Ej: 7° A" oninput="saveDraft()"></div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()"></div>
+                    <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control" placeholder="Nombre completo" oninput="saveDraft()"></div>
                     
                     <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()"></div>
                     <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts()"></div>
@@ -189,7 +198,7 @@
                     </div>
                     
                     <div class="col-12"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
-                        <select id="fObs" class="form-select border-primary shadow-sm">
+                        <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()">
                             <option value="Sin novedad">✅ Sin novedad</option>
                             <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
                             <option value="Teclado Falla">🟠 Teclado Falla</option>
@@ -209,7 +218,7 @@
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyWgn7OUWOg4Mt4WkZ8At4-4iD6R03i9-kr0HKskhdq9aCp0w7NGv96_feqqkbHZB8/exec";
-        let db = [], viewDate = new Date(2026, 3, 1), filterMode = 'all', currentWeek = 0, charts = {};
+        let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {}; // 2 es Marzo
 
         async function load() { 
             document.getElementById('loading').style.display = 'flex';
@@ -220,7 +229,32 @@
             document.getElementById('loading').style.display = 'none';
         }
 
-        // VALIDACIÓN DE CONTEO EN MODAL
+        function saveDraft() {
+            if(document.getElementById('fId').value !== "") return;
+            const draft = {
+                fecha: document.getElementById('fFecha').value,
+                hora: document.getElementById('fHora').value,
+                curso: document.getElementById('fCurso').value,
+                profesor: document.getElementById('fProfesor').value,
+                asignatura: document.getElementById('fAsignatura').value,
+                obs: document.getElementById('fObs').value
+            };
+            localStorage.setItem('franco_draft', JSON.stringify(draft));
+        }
+
+        function loadDraft() {
+            const saved = localStorage.getItem('franco_draft');
+            if(saved) {
+                const d = JSON.parse(saved);
+                document.getElementById('fFecha').value = d.fecha;
+                document.getElementById('fHora').value = d.hora;
+                document.getElementById('fCurso').value = d.curso;
+                document.getElementById('fProfesor').value = d.profesor;
+                document.getElementById('fAsignatura').value = d.asignatura;
+                document.getElementById('fObs').value = d.obs;
+            }
+        }
+
         function validateCounts() {
             const chr = parseInt(document.getElementById('fChr').value || 0);
             const ree = parseInt(document.getElementById('fRee').value || 0);
@@ -235,6 +269,7 @@
                 inputDev.classList.remove('val-warning');
                 msg.style.display = 'none';
             }
+            saveDraft();
         }
 
         function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
@@ -263,14 +298,15 @@
             const s = document.getElementById('searchBox').value.toLowerCase();
             const c = document.getElementById('courseSelect').value;
 
+            // 1. Filtrar primero por el mes y año que Franco está viendo
             const baseFiltered = db.filter(d => {
-                const date = new Date(d.fecha);
+                const date = new Date(d.fecha + "T00:00:00"); // Fix zona horaria
                 const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
                 const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
                 const matchC = c === "" || d.curso === c;
                 let matchW = true;
                 if(currentWeek > 0) {
-                    const day = date.getDate() + 1;
+                    const day = date.getDate();
                     const start = (currentWeek - 1) * 7 + 1;
                     const end = currentWeek * 7;
                     matchW = (day >= start && day <= end);
@@ -278,23 +314,38 @@
                 return matchM && matchS && matchC && matchW;
             });
 
+            // 2. Aplicar los modos de filtro específicos
             const finalFiltered = baseFiltered.filter(d => {
-                if(filterMode === 'lab') return (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+                const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
+                const isDebt = totalOut > parseInt(d.devueltos || 0);
+                const isDamaged = d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado");
+                const isLab = (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+
+                if(filterMode === 'lab') return isLab;
                 if(filterMode === 'reemp') return parseInt(d.reemplazo || 0) > 0;
-                if(filterMode === 'ok') return (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0;
+                if(filterMode === 'ok') return !isDebt && parseInt(d.devueltos) > 0;
+                if(filterMode === 'debt') return isDebt && !isDamaged; 
+                if(filterMode === 'damaged') return isDamaged;
                 return true;
             });
 
+            // 3. Renderizar Tabla
             document.getElementById('tableBody').innerHTML = finalFiltered.map(r => {
-                const isL = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
                 const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
                 const isOK = totalOut === parseInt(r.devueltos);
+                const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
+                const isLab = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
                 
-                let badgeClass = "bg-success text-white";
-                if(!isOK) badgeClass = "bg-danger text-white";
-                if(isL) badgeClass = "bg-purple-lab";
+                let rowClass = "";
+                if(isDamaged) rowClass = "row-damaged";
+                else if(isLab) rowClass = "row-lab";
+                else if(!isOK) rowClass = "row-pending";
 
-                return `<tr class="${isL?'row-lab':''}">
+                let badgeStyle = `background:${isOK ? '#198754' : '#ffc107'}; color:${isOK ? 'white' : '#444'}`;
+                if(isDamaged) badgeStyle = `background:var(--danger-red); color:white`;
+                else if(isLab) badgeStyle = `background:var(--purple-lab); color:white`;
+
+                return `<tr class="${rowClass}">
                     <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
                     <td><span class="badge bg-light text-dark border">${r.hora}</span></td>
                     <td>${r.curso}</td><td>${r.asignatura}</td>
@@ -302,8 +353,9 @@
                     <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                     <td class="text-success fw-bold">${r.devueltos}</td>
                     <td>
-                        ${isL ? '<span class="badge badge-status" style="background:var(--purple-lab); color:white">LABORATORIO</span>' : 
-                        `<span class="badge badge-status ${isOK?'bg-success':'bg-warning text-dark'}">${r.observacion}</span>`}
+                        <span class="badge badge-status" style="${badgeStyle}">
+                            ${isDamaged ? r.observacion : (isLab ? 'LABORATORIO' : (isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE'))}
+                        </span>
                     </td>
                     <td>
                         <div class="d-flex justify-content-center gap-1">
@@ -313,23 +365,39 @@
                     </td></tr>`;
             }).join('');
 
+            // 4. CORRECCIÓN DEL BANNER: Ahora detecta deudas del mes actual filtrado
+            const currentDebts = baseFiltered.filter(d => {
+                const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
+                const dev = parseInt(d.devueltos || 0);
+                return total > dev && !d.observacion.toLowerCase().includes("dañada");
+            });
+
+            const banner = document.getElementById('debtBanner');
+            if(currentDebts.length > 0) {
+                banner.style.display = 'block';
+                document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos con devolución incompleta en ${mNames[viewDate.getMonth()]}.`;
+            } else { 
+                banner.style.display = 'none'; 
+            }
+
+            // 5. Actualizar KPIs
             const labCount = baseFiltered.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
             const reempCount = baseFiltered.filter(d => parseInt(d.reemplazo || 0) > 0).length;
             const okCount = baseFiltered.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+            const damagedCount = baseFiltered.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
             
             document.getElementById('kpi-total').innerText = baseFiltered.length;
             document.getElementById('kpi-lab').innerText = labCount;
             document.getElementById('kpi-reemp').innerText = reempCount;
+            document.getElementById('kpi-damaged').innerText = damagedCount;
             document.getElementById('kpi-ok').innerText = baseFiltered.length > 0 ? Math.round((okCount / baseFiltered.length) * 100) + "%" : "0%";
 
             updateCharts(finalFiltered, baseFiltered);
         }
 
         function updateCharts(data, base) {
-            // Chart Docente (Barras Horizontales)
             const dS = {};
             data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; });
-            
             if(charts.D) charts.D.destroy();
             charts.D = new Chart(document.getElementById('chartDocente'), { 
                 type: 'bar', 
@@ -337,15 +405,13 @@
                 options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}
             });
 
-            // Chart Estado (Dona)
             const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
             const pending = base.length - ok;
-
             if(charts.S) charts.S.destroy();
             charts.S = new Chart(document.getElementById('chartStatus'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Devueltos OK', 'Pendientes/Diferencia'],
+                    labels: ['Devueltos OK', 'Diferencia'],
                     datasets: [{
                         data: [ok, pending],
                         backgroundColor: ['#198754', '#ffc107'],
@@ -356,12 +422,9 @@
             });
         }
 
-        // FUNCIÓN PARA EXPORTAR CSV
         function exportCSV() {
             let csv = "Fecha,Bloque,Curso,Asignatura,Profesor,Chr,Reemp,Dev,Obs\n";
-            db.forEach(r => {
-                csv += `${r.fecha},${r.hora},${r.curso},${r.asignatura},${r.profesor},${r.chromebooks},${r.reemplazo},${r.devueltos},${r.observacion}\n`;
-            });
+            db.forEach(r => { csv += `${r.fecha},${r.hora},${r.curso},${r.asignatura},${r.profesor},${r.chromebooks},${r.reemplazo},${r.devueltos},${r.observacion}\n`; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
@@ -402,6 +465,7 @@
             document.getElementById('fId').value = ''; 
             document.getElementById('valMsg').style.display = 'none';
             document.getElementById('fDev').classList.remove('val-warning');
+            loadDraft();
             new bootstrap.Modal(document.getElementById('resModal')).show(); 
         }
 
@@ -422,6 +486,7 @@
             };
             try {
                 await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                localStorage.removeItem('franco_draft');
                 bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
                 load();
             } catch(e) {
