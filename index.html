@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     
     <style>
-        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --danger-red: #d32f2f; --transition: all 0.3s ease; }
+        :root { --excel-green: #107c41; --header-green: #0b5c2f; --bg-light: #f4f7f6; --purple-lab: #6f42c1; --danger-red: #d32f2f; --transition: all 0.3s ease; --azul-inst: #003366; }
         body { background-color: var(--bg-light); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; }
         
         .kpi-card, .btn, .tab-btn, tr { transition: var(--transition); }
@@ -71,7 +71,7 @@
     </div>
 
     <div class="action-bar">
-        <button class="btn btn-danger btn-sm fw-bold px-3" onclick="generatePDF()">📄 REPORTE PDF</button>
+        <button class="btn btn-primary btn-sm fw-bold px-3" style="background: var(--azul-inst); border: none;" onclick="generatePDF()">📄 REPORTE PDF PRO</button>
         <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="window.print()">🖨️ IMPRIMIR</button>
         <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
         <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
@@ -175,7 +175,7 @@
 
         <div class="px-4 mt-4">
             <div class="content-card shadow-sm border-0">
-                <h5 class="fw-bold text-success mb-4">📈 Resumen de Rendimiento Anual 2026</h5>
+                <h5 class="fw-bold text-success mb-4">📈 Préstamos Mensuales 2026</h5>
                 <div style="height: 300px; width: 100%;">
                     <canvas id="chartAnual"></canvas>
                 </div>
@@ -202,20 +202,20 @@
                         <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()">
                             <option value="">Seleccione curso...</option>
                             <optgroup label="Básica">
-                                <option value="1° A">1°Básico A</option><option value="1° B">1°Básico B</option>
-                                <option value="2° A">2°Básico A</option><option value="2° B">2°Básico B</option>
-                                <option value="3° A">3°Básico A</option><option value="3° B">3°Básico B</option>
-                                <option value="4° A">4°Básico A</option><option value="4° B">4°Básico B</option>
-                                <option value="5° A">5°Básico A</option><option value="5° B">5°Básico B</option>
-                                <option value="6° A">6°Básico A</option><option value="6° B">6°Básico B</option>
-                                <option value="7° A">7°Básico A</option><option value="7° B">7°Básico B</option>
-                                <option value="8° A">8°Básico A</option><option value="8° B">8°Básico B</option>
+                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
                             </optgroup>
                             <optgroup label="Media">
-                                <option value="I°m A">I°Medio A</option><option value="I°m B">I°Medio B</option>
-                                <option value="II°m A">II°Medio A</option><option value="II°m B">II°Medio B</option>
-                                <option value="III°m A">III°Medio A</option><option value="III°m B">III°Medio B</option>
-                                <option value="IV°m A">IV°Medio A</option><option value="IV°m B">IV°Medio B</option>
+                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
                             </optgroup>
                         </select>
                     </div>
@@ -257,25 +257,12 @@
     </footer>
 
     <script>
+        // [Lógica de SCRIPT_URL, DB, etc. se mantiene igual]
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzb-7PBS3YU5lvyf7aRrf0Wkww_6GohBtSUXzlY1oApDva-Jg9RuP6Yc1RwRqifXAM/exec";
         let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
         const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-        const DOCENTES_NSG = [
-            "ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO",
-            "AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ",
-            "CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO",
-            "CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA",
-            "DEBORA GAETE","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS",
-            "FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS",
-            "GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA",
-            "KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS",
-            "LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN",
-            "MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES",
-            "NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ",
-            "PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA",
-            "STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"
-        ];
+        const DOCENTES_NSG = ["ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO","AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ","CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO","CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA","DEBORA GAETE","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS","FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS","GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA","KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS","LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN","MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES","NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ","PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA","STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"];
 
         function fillDocentes() {
             const select = document.getElementById('fProfesor');
@@ -283,9 +270,7 @@
             select.innerHTML = '<option value="">Seleccione un docente...</option>';
             DOCENTES_NSG.sort().forEach(d => {
                 const opt = document.createElement('option');
-                opt.value = d;
-                opt.textContent = d;
-                select.appendChild(opt);
+                opt.value = d; opt.textContent = d; select.appendChild(opt);
             });
         }
 
@@ -300,6 +285,7 @@
             document.getElementById('loading').style.display = 'none';
         }
 
+        // [Funciones renderAll, updateKPIs, updateCharts se mantienen igual para respetar tu diseño]
         function renderAll() {
             document.getElementById('displayDate').innerText = `${mNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
             const s = document.getElementById('searchBox').value.toLowerCase();
@@ -323,7 +309,6 @@
                 const isDebt = totalOut > parseInt(d.devueltos || 0);
                 const isDamaged = d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado");
                 const isLab = (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
-
                 if(filterMode === 'lab') return isLab;
                 if(filterMode === 'reemp') return parseInt(d.reemplazo || 0) > 0;
                 if(filterMode === 'ok') return !isDebt && parseInt(d.devueltos) > 0;
@@ -337,7 +322,6 @@
                 const isOK = totalOut === parseInt(r.devueltos);
                 const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
                 const isLab = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
-                
                 let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
                 let badgeStyle = `background:${isOK ? '#198754' : '#ffc107'}; color:${isOK ? 'white' : '#444'}`;
                 if(isDamaged) badgeStyle = `background:var(--danger-red); color:white`;
@@ -373,7 +357,6 @@
             const reemp = base.filter(d => parseInt(d.reemplazo || 0) > 0).length;
             const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
             const dmg = base.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
-            
             document.getElementById('kpi-total').innerText = base.length;
             document.getElementById('kpi-lab').innerText = lab;
             document.getElementById('kpi-reemp').innerText = reemp;
@@ -385,7 +368,6 @@
             const dS = {}; data.forEach(d => { dS[d.profesor] = (dS[d.profesor]||0)+1; });
             if(charts.D) charts.D.destroy();
             charts.D = new Chart(document.getElementById('chartDocente'), { type: 'bar', data: { labels: Object.keys(dS), datasets: [{data: Object.values(dS), backgroundColor: '#0d6832', borderRadius: 5}]}, options: {indexAxis:'y', maintainAspectRatio: false, plugins:{legend:false}}});
-
             const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
             const pending = base.length - ok;
             if(charts.S) charts.S.destroy();
@@ -393,27 +375,13 @@
         }
 
         function renderAnualChart() {
-            const usageTotal = new Array(12).fill(0), labs = new Array(12).fill(0);
+            const prestamosPorMes = new Array(12).fill(0);
             db.forEach(d => {
                 const dt = new Date(d.fecha + "T00:00:00");
-                if(dt.getFullYear() === 2026) {
-                    const m = dt.getMonth();
-                    usageTotal[m]++;
-                    if((d.asignatura + d.observacion).toLowerCase().includes("laboratorio")) labs[m]++;
-                }
+                if(dt.getFullYear() === 2026) prestamosPorMes[dt.getMonth()]++;
             });
             if(charts.A) charts.A.destroy();
-            charts.A = new Chart(document.getElementById('chartAnual'), {
-                type: 'line',
-                data: {
-                    labels: mNames.map(m => m.slice(0,3)),
-                    datasets: [
-                        { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
-                        { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-            });
+            charts.A = new Chart(document.getElementById('chartAnual'), { type: 'bar', data: { labels: mNames.map(m => m.slice(0,3)), datasets: [{label: 'Total Préstamos por Mes', data: prestamosPorMes, backgroundColor: '#0d6832', borderRadius: 5}]}, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }});
         }
 
         function validateCounts() {
@@ -468,14 +436,7 @@
 
         function saveDraft() {
             if(document.getElementById('fId').value !== "") return;
-            const draft = {
-                fecha: document.getElementById('fFecha').value,
-                hora: document.getElementById('fHora').value,
-                curso: document.getElementById('fCurso').value,
-                profesor: document.getElementById('fProfesor').value,
-                asignatura: document.getElementById('fAsignatura').value,
-                obs: document.getElementById('fObs').value
-            };
+            const draft = { fecha: document.getElementById('fFecha').value, hora: document.getElementById('fHora').value, curso: document.getElementById('fCurso').value, profesor: document.getElementById('fProfesor').value, asignatura: document.getElementById('fAsignatura').value, obs: document.getElementById('fObs').value };
             localStorage.setItem('franco_draft', JSON.stringify(draft));
         }
 
@@ -483,22 +444,13 @@
             const saved = localStorage.getItem('franco_draft');
             if(saved) {
                 const d = JSON.parse(saved);
-                document.getElementById('fFecha').value = d.fecha;
-                document.getElementById('fHora').value = d.hora;
-                document.getElementById('fCurso').value = d.curso;
-                document.getElementById('fProfesor').value = d.profesor;
-                document.getElementById('fAsignatura').value = d.asignatura;
-                document.getElementById('fObs').value = d.obs;
+                document.getElementById('fFecha').value = d.fecha; document.getElementById('fHora').value = d.hora; document.getElementById('fCurso').value = d.curso; document.getElementById('fProfesor').value = d.profesor; document.getElementById('fAsignatura').value = d.asignatura; document.getElementById('fObs').value = d.obs;
             }
         }
 
         function openModal() { 
-            document.getElementById('resForm').reset(); 
-            document.getElementById('fId').value = ''; 
-            document.getElementById('valMsg').style.display = 'none';
-            document.getElementById('fDev').classList.remove('val-warning');
-            loadDraft();
-            new bootstrap.Modal(document.getElementById('resModal')).show(); 
+            document.getElementById('resForm').reset(); document.getElementById('fId').value = ''; document.getElementById('valMsg').style.display = 'none'; document.getElementById('fDev').classList.remove('val-warning');
+            loadDraft(); new bootstrap.Modal(document.getElementById('resModal')).show(); 
         }
 
         async function deleteItem(id) {
@@ -511,42 +463,97 @@
         }
 
         function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
-        function setFilterWeek(w) { 
-            currentWeek = w; 
-            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w));
-            renderAll(); 
-        }
+        function setFilterWeek(w) { currentWeek = w; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w)); renderAll(); }
         function setFilterMode(m) { filterMode = m; renderAll(); }
-        function resetApp() { 
-            filterMode = 'all'; 
-            currentWeek = 0; 
-            document.getElementById('searchBox').value = ''; 
-            document.getElementById('courseSelect').value = ''; 
-            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); 
-            renderAll(); 
-        }
+        function resetApp() { filterMode = 'all'; currentWeek = 0; document.getElementById('searchBox').value = ''; document.getElementById('courseSelect').value = ''; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); renderAll(); }
 
+        // --- PDF CON LOGO, COLOR AZUL Y GRÁFICOS ---
         function generatePDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const mesActual = mNames[viewDate.getMonth()];
             const anioActual = viewDate.getFullYear();
+            const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
+            
             const mesData = db.filter(d => {
                 const date = new Date(d.fecha + "T00:00:00");
                 return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
             });
-            doc.setFontSize(18); doc.setTextColor(11, 92, 47);
-            doc.text(`Reporte Gestión Chromebooks - ${mesActual} ${anioActual}`, 14, 20);
-            doc.setFontSize(10); doc.setTextColor(100);
-            doc.text(`Generado por Franco - Técnico Informático`, 14, 28);
-            const docentesMap = {}; mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
-            const topDocentes = Object.entries(docentesMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
-            doc.autoTable({
-                startY: 45, head: [['#', 'Docente', 'Cant. Préstamos']],
-                body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
-                headStyles: { fillColor: [13, 104, 50] }
-            });
-            doc.save(`Reporte_Chromebooks_${mesActual}_${anioActual}.pdf`);
+
+            // Fondo cabecera Azul Institucional
+            doc.setFillColor(0, 51, 102); 
+            doc.rect(0, 0, 210, 40, 'F');
+            
+            // Cargar imagen de forma asíncrona
+            const img = new Image();
+            img.src = logoUrl;
+            img.onload = function() {
+                // Logo a la derecha
+                doc.addImage(img, 'PNG', 165, 5, 25, 30);
+                
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(22);
+                doc.setFont("helvetica", "bold");
+                doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 25);
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "normal");
+                doc.text(`REPORTE MENSUAL: ${mesActual.toUpperCase()} ${anioActual}`, 14, 33);
+
+                // Estadísticas
+                doc.setTextColor(44, 62, 80);
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text("Resumen Estadístico", 14, 55);
+                
+                const total = mesData.length;
+                const ok = mesData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
+                const dmg = mesData.filter(d => d.observacion.toLowerCase().includes("dañada")).length;
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.text(`Total de Préstamos: ${total}`, 14, 65);
+                doc.text(`Devoluciones Completas: ${ok}`, 14, 72);
+                doc.text(`Equipos con Daños: ${dmg}`, 14, 79);
+                doc.text(`Tasa de Retorno: ${total > 0 ? Math.round((ok/total)*100) : 0}%`, 130, 65);
+                doc.text(`Generado por: Franco (Tec. Informático)`, 130, 72);
+                doc.text(`Fecha emisión: ${new Date().toLocaleDateString()}`, 130, 79);
+
+                // Agregar Gráfico al PDF (Captura del gráfico de estado)
+                const chartCanvas = document.getElementById('chartStatus');
+                const chartImg = chartCanvas.toDataURL("image/png", 1.0);
+                doc.text("Distribución de Estado", 140, 95);
+                doc.addImage(chartImg, 'PNG', 140, 100, 50, 50);
+
+                // Tabla Docentes
+                const docentesMap = {}; 
+                mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
+                const topDocentes = Object.entries(docentesMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
+
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text("Uso por Docente (Top 15)", 14, 95);
+
+                doc.autoTable({
+                    startY: 100,
+                    head: [['#', 'Docente Responsable', 'Préstamos']],
+                    body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
+                    headStyles: { fillColor: [0, 51, 102], fontSize: 11 },
+                    alternateRowStyles: { fillColor: [245, 245, 245] },
+                    margin: { right: 80 } // Dejar espacio para el gráfico a la derecha
+                });
+
+                // Pie de página
+                const pageCount = doc.internal.getNumberOfPages();
+                for(let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(9);
+                    doc.setTextColor(150);
+                    doc.text("Este documento es un reporte oficial del área de Informática NSG.", 14, 285);
+                    doc.text(`Página ${i} de ${pageCount}`, 180, 285);
+                }
+
+                doc.save(`Reporte_Franco_${mesActual}.pdf`);
+            };
         }
 
         window.onload = load;
