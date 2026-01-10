@@ -196,9 +196,38 @@
                             <option value="11:50">11:50</option><option value="14:00">14:00</option>
                         </select>
                     </div>
-                    <div class="col-md-6"><label class="fw-bold small text-muted">CURSO</label><input type="text" id="fCurso" class="form-control" placeholder="Ej: 7° A" oninput="saveDraft()"></div>
+
+                    <div class="col-md-6">
+                        <label class="fw-bold small text-muted">CURSO</label>
+                        <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()">
+                            <option value="">Seleccione curso...</option>
+                            <optgroup label="Básica">
+                                <option value="1° A">1°Básico A</option><option value="1° B">1°Básico B</option>
+                                <option value="2° A">2°Básico A</option><option value="2° B">2°Básico B</option>
+                                <option value="3° A">3°Básico A</option><option value="3° B">3°Básico B</option>
+                                <option value="4° A">4°Básico A</option><option value="4° B">4°Básico B</option>
+                                <option value="5° A">5°Básico A</option><option value="5° B">5°Básico B</option>
+                                <option value="6° A">6°Básico A</option><option value="6° B">6°Básico B</option>
+                                <option value="7° A">7°Básico A</option><option value="7° B">7°Básico B</option>
+                                <option value="8° A">8°Básico A</option><option value="8° B">8°Básico B</option>
+                            </optgroup>
+                            <optgroup label="Media">
+                                <option value="I°m A">I°Medio A</option><option value="I°m B">I°Medio B</option>
+                                <option value="II°m A">II°Medio A</option><option value="II°m B">II°Medio B</option>
+                                <option value="III°m A">III°Medio A</option><option value="III°m B">III°Medio B</option>
+                                <option value="IV°m A">IV°Medio A</option><option value="IV°m B">IV°Medio B</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
                     <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()"></div>
-                    <div class="col-12"><label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label><input type="text" id="fProfesor" class="form-control" placeholder="Nombre completo" oninput="saveDraft()"></div>
+                    
+                    <div class="col-12">
+                        <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
+                        <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()">
+                            <option value="">Seleccione un docente...</option>
+                        </select>
+                    </div>
                     
                     <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()"></div>
                     <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts()"></div>
@@ -232,139 +261,43 @@
         let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
         const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+        const DOCENTES_NSG = [
+            "ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO",
+            "AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ",
+            "CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO",
+            "CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA",
+            "DEBORA GAETE","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS",
+            "FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS",
+            "GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA",
+            "KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS",
+            "LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN",
+            "MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES",
+            "NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ",
+            "PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA",
+            "STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"
+        ];
+
+        function fillDocentes() {
+            const select = document.getElementById('fProfesor');
+            if(!select) return;
+            select.innerHTML = '<option value="">Seleccione un docente...</option>';
+            DOCENTES_NSG.sort().forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                select.appendChild(opt);
+            });
+        }
+
         async function load() { 
             document.getElementById('loading').style.display = 'flex';
+            fillDocentes();
             try {
                 const r = await fetch(SCRIPT_URL); db = await r.json(); 
                 renderAll(); 
                 renderAnualChart(); 
             } catch(e) { console.error("Error cargando datos:", e); }
             document.getElementById('loading').style.display = 'none';
-        }
-
-        // --- FUNCIÓN DE REPORTE PDF AGREGADA ---
-        function generatePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const mesActual = mNames[viewDate.getMonth()];
-            const anioActual = viewDate.getFullYear();
-
-            // Filtrar datos solo del mes visible
-            const mesData = db.filter(d => {
-                const date = new Date(d.fecha + "T00:00:00");
-                return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-            });
-
-            // 1. Título
-            doc.setFontSize(18);
-            doc.setTextColor(11, 92, 47);
-            doc.text(`Reporte de Gestión Chromebooks - ${mesActual} ${anioActual}`, 14, 20);
-            
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(`Generado por Franco - Técnico Informático`, 14, 28);
-
-            // 2. KPI Total
-            doc.setFontSize(12);
-            doc.setTextColor(0);
-            doc.text(`Total de Préstamos del Mes: ${mesData.length}`, 14, 40);
-
-            // 3. TOP 20 DOCENTES
-            const docentesMap = {};
-            mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
-            const topDocentes = Object.entries(docentesMap)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 20);
-
-            doc.autoTable({
-                startY: 45,
-                head: [['#', 'Docente', 'Cant. Préstamos']],
-                body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
-                headStyles: { fillStyle: [13, 104, 50] },
-                margin: { top: 45 }
-            });
-
-            // 4. TOP 20 EQUIPOS DAÑADOS
-            // Filtrar daños y agrupar por observación técnica o detalle si existe
-            const dañadosData = mesData.filter(d => 
-                d.observacion.toLowerCase().includes("dañada") || 
-                d.observacion.toLowerCase().includes("dañado") || 
-                d.observacion.toLowerCase().includes("falla") ||
-                d.observacion.toLowerCase().includes("enciende")
-            ).slice(0, 20);
-
-            doc.text("Top 20 Reportes de Equipos con Fallas/Daños", 14, doc.lastAutoTable.finalY + 15);
-            
-            doc.autoTable({
-                startY: doc.lastAutoTable.finalY + 20,
-                head: [['Fecha', 'Curso', 'Profesor', 'Observación']],
-                body: dañadosData.map(d => [d.fecha, d.curso, d.profesor, d.observacion]),
-                headStyles: { fillStyle: [211, 47, 47] }
-            });
-
-            doc.save(`Reporte_Chromebooks_${mesActual}_${anioActual}.pdf`);
-        }
-
-        function saveDraft() {
-            if(document.getElementById('fId').value !== "") return;
-            const draft = {
-                fecha: document.getElementById('fFecha').value,
-                hora: document.getElementById('fHora').value,
-                curso: document.getElementById('fCurso').value,
-                profesor: document.getElementById('fProfesor').value,
-                asignatura: document.getElementById('fAsignatura').value,
-                obs: document.getElementById('fObs').value
-            };
-            localStorage.setItem('franco_draft', JSON.stringify(draft));
-        }
-
-        function loadDraft() {
-            const saved = localStorage.getItem('franco_draft');
-            if(saved) {
-                const d = JSON.parse(saved);
-                document.getElementById('fFecha').value = d.fecha;
-                document.getElementById('fHora').value = d.hora;
-                document.getElementById('fCurso').value = d.curso;
-                document.getElementById('fProfesor').value = d.profesor;
-                document.getElementById('fAsignatura').value = d.asignatura;
-                document.getElementById('fObs').value = d.obs;
-            }
-        }
-
-        function validateCounts() {
-            const chr = parseInt(document.getElementById('fChr').value || 0);
-            const ree = parseInt(document.getElementById('fRee').value || 0);
-            const dev = parseInt(document.getElementById('fDev').value || 0);
-            const inputDev = document.getElementById('fDev');
-            const msg = document.getElementById('valMsg');
-            
-            if(dev !== (chr + ree)) {
-                inputDev.classList.add('val-warning');
-                msg.style.display = 'block';
-            } else {
-                inputDev.classList.remove('val-warning');
-                msg.style.display = 'none';
-            }
-            saveDraft();
-        }
-
-        function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
-        
-        function setFilterWeek(w) { 
-            currentWeek = w; 
-            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w));
-            renderAll(); 
-        }
-
-        function setFilterMode(m) { filterMode = m; renderAll(); }
-
-        function resetApp() { 
-            filterMode = 'all'; 
-            currentWeek = 0; 
-            document.getElementById('searchBox').value = ''; 
-            document.getElementById('courseSelect').value = ''; 
-            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); 
-            renderAll(); 
         }
 
         function renderAll() {
@@ -426,10 +359,10 @@
 
             const currentDebts = baseFiltered.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !d.observacion.toLowerCase().includes("dañada"));
             const banner = document.getElementById('debtBanner');
-            if(currentDebts.length > 0) {
+            if(banner && currentDebts.length > 0) {
                 banner.style.display = 'block';
                 document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos pendientes en ${mNames[viewDate.getMonth()]}.`;
-            } else banner.style.display = 'none';
+            } else if(banner) banner.style.display = 'none';
 
             updateKPIs(baseFiltered);
             updateCharts(finalFiltered, baseFiltered);
@@ -460,19 +393,15 @@
         }
 
         function renderAnualChart() {
-            const usageTotal = new Array(12).fill(0), replacements = new Array(12).fill(0), damaged = new Array(12).fill(0), labs = new Array(12).fill(0);
-            
+            const usageTotal = new Array(12).fill(0), labs = new Array(12).fill(0);
             db.forEach(d => {
                 const dt = new Date(d.fecha + "T00:00:00");
                 if(dt.getFullYear() === 2026) {
                     const m = dt.getMonth();
                     usageTotal[m]++;
-                    if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
-                    if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
                     if((d.asignatura + d.observacion).toLowerCase().includes("laboratorio")) labs[m]++;
                 }
             });
-
             if(charts.A) charts.A.destroy();
             charts.A = new Chart(document.getElementById('chartAnual'), {
                 type: 'line',
@@ -480,55 +409,22 @@
                     labels: mNames.map(m => m.slice(0,3)),
                     datasets: [
                         { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
-                        { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 },
-                        { label: 'Uso Reemplazos', data: replacements, borderColor: '#f39c12', backgroundColor: '#f39c12', tension: 0.3, fill: false, borderDash: [5, 5] },
-                        { label: 'Equipos Dañados', data: damaged, borderColor: '#dc3545', backgroundColor: '#dc3545', tension: 0.3, fill: false, borderWidth: 2 }
+                        { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 }
                     ]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { position: 'bottom' },
-                        tooltip: { mode: 'index', intersect: false }
-                    },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } }
-                }
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
             });
         }
 
-        function editItem(id) {
-            const r = db.find(x => x.id.toString() === id.toString());
-            document.getElementById('fId').value = r.id;
-            document.getElementById('fFecha').value = r.fecha;
-            document.getElementById('fHora').value = r.hora;
-            document.getElementById('fCurso').value = r.curso;
-            document.getElementById('fProfesor').value = r.profesor;
-            document.getElementById('fAsignatura').value = r.asignatura;
-            document.getElementById('fChr').value = r.chromebooks;
-            document.getElementById('fRee').value = r.reemplazo;
-            document.getElementById('fDev').value = r.devueltos;
-            document.getElementById('fObs').value = r.observacion;
-            validateCounts();
-            new bootstrap.Modal(document.getElementById('resModal')).show();
-        }
-
-        async function deleteItem(id) {
-            if(!confirm("¿Franco, estás seguro de eliminar este registro?")) return;
-            document.getElementById('loading').style.display = 'flex';
-            try {
-                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
-                load();
-            } catch(e) { alert("Error al eliminar"); document.getElementById('loading').style.display = 'none'; }
-        }
-
-        function openModal() { 
-            document.getElementById('resForm').reset(); 
-            document.getElementById('fId').value = ''; 
-            document.getElementById('valMsg').style.display = 'none';
-            document.getElementById('fDev').classList.remove('val-warning');
-            loadDraft();
-            new bootstrap.Modal(document.getElementById('resModal')).show(); 
+        function validateCounts() {
+            const chr = parseInt(document.getElementById('fChr').value || 0);
+            const ree = parseInt(document.getElementById('fRee').value || 0);
+            const dev = parseInt(document.getElementById('fDev').value || 0);
+            const inputDev = document.getElementById('fDev');
+            const msg = document.getElementById('valMsg');
+            if(dev !== (chr + ree)) { inputDev.classList.add('val-warning'); msg.style.display = 'block'; }
+            else { inputDev.classList.remove('val-warning'); msg.style.display = 'none'; }
+            saveDraft();
         }
 
         async function saveData() {
@@ -552,6 +448,105 @@
                 bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
                 load();
             } catch(e) { alert("Error al guardar"); document.getElementById('loading').style.display = 'none'; }
+        }
+
+        function editItem(id) {
+            const r = db.find(x => x.id.toString() === id.toString());
+            document.getElementById('fId').value = r.id;
+            document.getElementById('fFecha').value = r.fecha;
+            document.getElementById('fHora').value = r.hora;
+            document.getElementById('fCurso').value = r.curso;
+            document.getElementById('fProfesor').value = r.profesor;
+            document.getElementById('fAsignatura').value = r.asignatura;
+            document.getElementById('fChr').value = r.chromebooks;
+            document.getElementById('fRee').value = r.reemplazo;
+            document.getElementById('fDev').value = r.devueltos;
+            document.getElementById('fObs').value = r.observacion;
+            validateCounts();
+            new bootstrap.Modal(document.getElementById('resModal')).show();
+        }
+
+        function saveDraft() {
+            if(document.getElementById('fId').value !== "") return;
+            const draft = {
+                fecha: document.getElementById('fFecha').value,
+                hora: document.getElementById('fHora').value,
+                curso: document.getElementById('fCurso').value,
+                profesor: document.getElementById('fProfesor').value,
+                asignatura: document.getElementById('fAsignatura').value,
+                obs: document.getElementById('fObs').value
+            };
+            localStorage.setItem('franco_draft', JSON.stringify(draft));
+        }
+
+        function loadDraft() {
+            const saved = localStorage.getItem('franco_draft');
+            if(saved) {
+                const d = JSON.parse(saved);
+                document.getElementById('fFecha').value = d.fecha;
+                document.getElementById('fHora').value = d.hora;
+                document.getElementById('fCurso').value = d.curso;
+                document.getElementById('fProfesor').value = d.profesor;
+                document.getElementById('fAsignatura').value = d.asignatura;
+                document.getElementById('fObs').value = d.obs;
+            }
+        }
+
+        function openModal() { 
+            document.getElementById('resForm').reset(); 
+            document.getElementById('fId').value = ''; 
+            document.getElementById('valMsg').style.display = 'none';
+            document.getElementById('fDev').classList.remove('val-warning');
+            loadDraft();
+            new bootstrap.Modal(document.getElementById('resModal')).show(); 
+        }
+
+        async function deleteItem(id) {
+            if(!confirm("¿Franco, estás seguro de eliminar este registro?")) return;
+            document.getElementById('loading').style.display = 'flex';
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
+                load();
+            } catch(e) { alert("Error al eliminar"); document.getElementById('loading').style.display = 'none'; }
+        }
+
+        function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
+        function setFilterWeek(w) { 
+            currentWeek = w; 
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w));
+            renderAll(); 
+        }
+        function setFilterMode(m) { filterMode = m; renderAll(); }
+        function resetApp() { 
+            filterMode = 'all'; 
+            currentWeek = 0; 
+            document.getElementById('searchBox').value = ''; 
+            document.getElementById('courseSelect').value = ''; 
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); 
+            renderAll(); 
+        }
+
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const mesActual = mNames[viewDate.getMonth()];
+            const anioActual = viewDate.getFullYear();
+            const mesData = db.filter(d => {
+                const date = new Date(d.fecha + "T00:00:00");
+                return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+            });
+            doc.setFontSize(18); doc.setTextColor(11, 92, 47);
+            doc.text(`Reporte Gestión Chromebooks - ${mesActual} ${anioActual}`, 14, 20);
+            doc.setFontSize(10); doc.setTextColor(100);
+            doc.text(`Generado por Franco - Técnico Informático`, 14, 28);
+            const docentesMap = {}; mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
+            const topDocentes = Object.entries(docentesMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
+            doc.autoTable({
+                startY: 45, head: [['#', 'Docente', 'Cant. Préstamos']],
+                body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
+                headStyles: { fillColor: [13, 104, 50] }
+            });
+            doc.save(`Reporte_Chromebooks_${mesActual}_${anioActual}.pdf`);
         }
 
         window.onload = load;
