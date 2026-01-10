@@ -1,4 +1,23 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzb-7PBS3YU5lvyf7aRrf0Wkww_6GohBtSUXzlY1oApDva-Jg9RuP6Yc1RwRqifXAM/exec";
+function getEstado(r) {
+    const obs = (r.observacion || "").toLowerCase();
+    const chr = parseInt(r.chromebooks || 0);
+    const ree = parseInt(r.reemplazo || 0);
+    const dev = parseInt(r.devueltos || 0);
+
+    if (obs.includes("laboratorio")) return "LABORATORIO";
+    if (obs.includes("dañada") || obs.includes("dañado")) return "DAÑADO";
+    if ((chr + ree) > dev) return "ACTIVO";
+    return "CERRADO";
+}
+
+function calcEstado(chr,ree,dev,obs){
+ obs=(obs||"").toLowerCase();
+ if(obs.includes("laboratorio")) return "LABORATORIO";
+ if(obs.includes("dañada")||obs.includes("dañado")) return "DAÑADO";
+ if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
+ return "CERRADO";
+}
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJwFQ73wPGU5fQY-xO3hvxlqTY3ix_5XAa0DZhxKdD1bny361TDCMf_ImuFoywA/exec";
 let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
 const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -210,20 +229,40 @@ function updateCharts(base) {
         });
     }
 
-    const okCount = base.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo || 0)) === parseInt(d.devueltos)).length;
-    const pendingCount = base.length - okCount;
-    const ctxStatus = document.getElementById('chartStatus');
-    if(ctxStatus) {
-        if(charts.S) charts.S.destroy();
-        charts.S = new Chart(ctxStatus, { 
-            type: 'doughnut', 
-            data: { 
-                labels: ['OK', 'Pendiente'], 
-                datasets: [{ data: [okCount, pendingCount], backgroundColor: ['#198754', '#ffc107'], borderWidth: 0 }]
-            }, 
-            options: { maintainAspectRatio: false, cutout: '70%' }
-        });
-    }
+    const cerrados = base.filter(d => getEstado(d) === "CERRADO").length;
+const activos = base.filter(d => getEstado(d) === "ACTIVO").length;
+const danados = base.filter(d => getEstado(d) === "DAÑADO").length;
+
+const ctxStatus = document.getElementById('chartStatus');
+if(ctxStatus) {
+    if(charts.S) charts.S.destroy();
+    charts.S = new Chart(ctxStatus, {
+        type: 'bar',
+        data: {
+            labels: ['Entregados', 'Pendientes', 'Dañados'],
+            datasets: [{
+                data: [cerrados, activos, danados],
+                backgroundColor: ['#198754', '#ffc107', '#dc3545'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                }
+            }
+        }
+    });
+}
+
 }
 
 // 5. Chart Anual
@@ -282,7 +321,10 @@ async function saveData() {
     }
 
     document.getElementById('loading').style.display = 'flex';
-    const payload = {
+    const estado=calcEstado(document.getElementById('fChr').value,document.getElementById('fRee').value,document.getElementById('fDev').value,document.getElementById('fObs').value);
+const fechaCierre= estado==='CERRADO' ? new Date().toISOString().slice(0,10):'';
+const resp='Franco San Martín';
+const payload = {
         action: document.getElementById('fId').value ? 'update' : 'create',
         id: document.getElementById('fId').value,
         fecha: document.getElementById('fFecha').value,
@@ -293,7 +335,7 @@ async function saveData() {
         chromebooks: document.getElementById('fChr').value,
         reemplazo: document.getElementById('fRee').value,
         devueltos: document.getElementById('fDev').value,
-        observacion: document.getElementById('fObs').value
+        observacion: document.getElementById('fObs').value, estado_operativo: estado, fecha_cierre: fechaCierre, responsable_cierre: resp
     };
     try {
         await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
@@ -412,13 +454,15 @@ function generatePDF() {
         
         const total = mesData.length;
         const ok = mesData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
-        const dmg = mesData.filter(d => d.observacion.toLowerCase().includes("dañada")).length;
+        const dmg = mesData.filter(d => d.estado_operativo==='DAÑADO').length;
+        const activos=mesData.filter(d=>d.estado_operativo==='ACTIVO').length;
 
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.text(`Total de Préstamos: ${total}`, 14, 65);
         doc.text(`Devoluciones Completas: ${ok}`, 14, 72);
         doc.text(`Equipos con Daños: ${dmg}`, 14, 79);
+        doc.text(`Préstamos Activos: ${activos}`,14,86);
         doc.text(`Tasa de Retorno: ${total > 0 ? Math.round((ok/total)*100) : 0}%`, 130, 65);
         doc.text(`Generado por: Franco (Tec. Informático)`, 130, 72);
         doc.text(`Fecha emisión: ${new Date().toLocaleDateString()}`, 130, 79);
