@@ -18,7 +18,11 @@ function calcEstado(chr,ree,dev,obs){
  return "CERRADO";
 }
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJwFQ73wPGU5fQY-xO3hvxlqTY3ix_5XAa0DZhxKdD1bny361TDCMf_ImuFoywA/exec";
-let db = [], viewDate = new Date(2026, 2, 1), filterMode = 'all', currentWeek = 0, charts = {};
+// Inicializar con la fecha actual
+const _hoy = new Date();
+const _diaHoy = _hoy.getDate();
+const _semanaInicial = _diaHoy <= 7 ? 1 : _diaHoy <= 14 ? 2 : _diaHoy <= 21 ? 3 : 4;
+let db = [], viewDate = new Date(_hoy.getFullYear(), _hoy.getMonth(), 1), filterMode = 'all', currentWeek = _semanaInicial, charts = {};
 const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 const DOCENTES_NSG = ["ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO","AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ","CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO","CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA","DEBORA GAETE","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS","FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS","GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA","KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS","LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN","MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES","NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ","PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA","STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"];
@@ -30,14 +34,35 @@ function debouncedRender() {
     debounceTimer = setTimeout(renderAll, 300);
 }
 
+// Docentes extra agregados en sesión (se conservan entre llamadas a fillDocentes)
+const _docentesExtra = [];
+
 function fillDocentes() {
     const select = document.getElementById('fProfesor');
     if(!select) return;
+    const valorActual = select.value;
     select.innerHTML = '<option value="">Seleccione un docente...</option>';
-    DOCENTES_NSG.sort().forEach(d => {
+    [...DOCENTES_NSG, ..._docentesExtra].sort().forEach(d => {
         const opt = document.createElement('option');
         opt.value = d; opt.textContent = d; select.appendChild(opt);
     });
+    // Restaurar valor si existía
+    if(valorActual) select.value = valorActual;
+}
+
+function agregarDocente() {
+    const nombre = prompt("Ingrese el nombre completo del docente:");
+    if (!nombre || !nombre.trim()) return;
+    const nombreFinal = nombre.trim().toUpperCase();
+    const sel = document.getElementById('fProfesor');
+    // Verificar si ya existe en la lista fija o en extras
+    const yaExiste = DOCENTES_NSG.includes(nombreFinal) || _docentesExtra.includes(nombreFinal);
+    if (!yaExiste) {
+        _docentesExtra.push(nombreFinal);
+        fillDocentes(); // re-renderizar con el nuevo incluido
+    }
+    sel.value = nombreFinal;
+    saveDraft();
 }
 
 // 1. Carga inicial de datos
@@ -58,6 +83,8 @@ async function load() {
         });
         Toast.fire({ icon: 'success', title: 'Datos sincronizados correctamente' });
         
+        // Activar el tab de la semana actual
+        document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === _semanaInicial));
         renderAll(); 
         renderAnualChart(); 
     } catch(e) { 
