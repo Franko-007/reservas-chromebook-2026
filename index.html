@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión Chromebooks 2026 - Franco</title>
@@ -27,9 +29,7 @@
     </div>
 
     <div class="action-bar">
-        <button class="btn btn-success btn-sm fw-bold px-3" style="background: #1d6f42; border:none;" onclick="exportToCSV()">📊 EXPORTAR EXCEL</button>
         <button class="btn btn-primary btn-sm fw-bold px-3" style="background: var(--azul-inst); border: none;" onclick="generatePDF()">📄 REPORTE PDF PRO</button>
-        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="window.print()">🖨️ IMPRIMIR</button>
         <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
         <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
     </div>
@@ -187,9 +187,12 @@
                     
                     <div class="col-12">
                         <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
-                        <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
-                            <option value="">Seleccione un docente...</option>
-                        </select>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
+                                <option value="">Seleccione un docente...</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
+                        </div>
                     </div>
                     
                     <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()" value="0" min="0"></div>
