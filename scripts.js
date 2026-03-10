@@ -4,15 +4,16 @@ function getEstado(r) {
     const ree = parseInt(r.reemplazo || 0);
     const dev = parseInt(r.devueltos || 0);
 
-    if (obs.includes("laboratorio")) return "LABORATORIO";
+    // Laboratorio: campo dedicado o legado en observacion
+    if (r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" || obs.includes("laboratorio")) return "LABORATORIO";
     if (obs.includes("dañada") || obs.includes("dañado")) return "DAÑADO";
     if ((chr + ree) > dev) return "ACTIVO";
     return "CERRADO";
 }
 
-function calcEstado(chr,ree,dev,obs){
+function calcEstado(chr,ree,dev,obs,lab){
  obs=(obs||"").toLowerCase();
- if(obs.includes("laboratorio")) return "LABORATORIO";
+ if(lab) return "LABORATORIO";
  if(obs.includes("dañada")||obs.includes("dañado")) return "DAÑADO";
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
@@ -125,7 +126,8 @@ function renderAll() {
         const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
         const isDebt = totalOut > parseInt(d.devueltos || 0);
         const isDamaged = d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado");
-        const isLab = (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+        const isLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
+                   || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
 
         let matchMode = true;
         if(filterMode === 'lab') matchMode = isLab;
@@ -148,28 +150,45 @@ function renderAll() {
         if(tableEl) tableEl.style.display = 'table';
         if(emptyState) emptyState.style.display = 'none';
         
-        tableBody.innerHTML = finalFiltered.map(r => {
+        // Ordenar por fecha descendente (más reciente primero)
+        const sorted = [...finalFiltered].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        // Guardar referencia global para PDF filtrado
+        window._lastSortedData = sorted;
+
+        // Contador de registros
+        const contadorEl = document.getElementById('recordCount');
+        if(contadorEl) contadorEl.textContent = `${sorted.length} registro${sorted.length !== 1 ? 's' : ''}`;
+
+        tableBody.innerHTML = sorted.map(r => {
             const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
             const isOK = totalOut === parseInt(r.devueltos);
             const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
-            const isLab = (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
+            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
+                       || (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
             
             let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
-            let badgeStyle = `background:${isOK ? '#198754' : '#ffc107'}; color:${isOK ? 'white' : '#444'}`;
-            if(isDamaged) badgeStyle = `background:var(--danger-red); color:white`;
-            else if(isLab) badgeStyle = `background:var(--purple-lab); color:white`;
+            // Badge de estado (devolución/pendiente/dañado)
+            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
+            let estadoColor = isOK ? '#198754' : '#ffc107';
+            let estadoTextColor = isOK ? 'white' : '#444';
+            if(isDamaged) { estadoTexto = r.observacion; estadoColor = 'var(--danger-red)'; estadoTextColor = 'white'; }
+
+            // Construir celda de estado: laboratorio + estado pueden coexistir
+            const badgeLab = isLab ? `<span class="badge badge-status me-1" style="background:var(--purple-lab);color:white">🟣 LAB</span>` : '';
+            const badgeEstado = `<span class="badge badge-status" style="background:${estadoColor};color:${estadoTextColor}">${estadoTexto}</span>`;
 
             return `<tr class="${rowClass}">
                 <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
                 <td><span class="badge bg-light text-dark border">${r.hora}</span></td>
                 <td>${r.curso}</td><td>${r.asignatura}</td>
-                <td class="text-start fw-bold" style="color:#2b5797">${r.profesor}</td>
+                <td class="text-start fw-bold" style="color:#2b5797; cursor:pointer; text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
                 <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                 <td class="text-success fw-bold">${r.devueltos}</td>
-                <td><span class="badge badge-status" style="${badgeStyle}">${isDamaged ? r.observacion : (isLab ? 'LABORATORIO' : (isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE'))}</span></td>
+                <td>${badgeLab}${badgeEstado}</td>
                 <td><div class="d-flex justify-content-center gap-1">
-                    <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
-                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
+                    <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar: ${r.profesor} – ${r.fecha}">✏️</button>
+                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar: ${r.profesor} – ${r.fecha}">🗑️</button>
                 </div></td></tr>`;
         }).join('');
     }
@@ -190,16 +209,59 @@ function renderAll() {
 
 // 3. KPIs
 function updateKPIs(base) {
-    const lab = base.filter(d => (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+    const lab = base.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
+                           || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
     const reemp = base.filter(d => parseInt(d.reemplazo || 0) > 0).length;
     const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
     const dmg = base.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
     
-    if(document.getElementById('kpi-total')) document.getElementById('kpi-total').innerText = base.length;
-    if(document.getElementById('kpi-lab')) document.getElementById('kpi-lab').innerText = lab;
-    if(document.getElementById('kpi-reemp')) document.getElementById('kpi-reemp').innerText = reemp;
-    if(document.getElementById('kpi-damaged')) document.getElementById('kpi-damaged').innerText = dmg;
-    if(document.getElementById('kpi-ok')) document.getElementById('kpi-ok').innerText = base.length > 0 ? Math.round((ok / base.length) * 100) + "%" : "0%";
+    function animateKPI(id, val) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.style.transition = 'opacity 0.2s';
+        el.style.opacity = '0';
+        setTimeout(() => { el.innerText = val; el.style.opacity = '1'; }, 200);
+    }
+    animateKPI('kpi-total', base.length);
+    animateKPI('kpi-lab', lab);
+    animateKPI('kpi-reemp', reemp);
+    animateKPI('kpi-damaged', dmg);
+    animateKPI('kpi-ok', base.length > 0 ? Math.round((ok / base.length) * 100) + "%" : "0%");
+
+    // ── Barra de stock en tiempo real ──────────────────────────────────
+    // Equipos "en préstamo" = registros ACTIVOS del mes (pendientes de devolución)
+    const enUso = base.filter(d => {
+        const total = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        const dev = parseInt(d.devueltos||0);
+        const isDmg = (d.observacion||"").toLowerCase().includes("dañ");
+        return total > dev && !isDmg;
+    }).reduce((sum, d) => {
+        return sum + (parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0) - parseInt(d.devueltos||0));
+    }, 0);
+
+    const disponible = Math.max(0, STOCK_MAXIMO - enUso);
+    const pct = Math.min(100, Math.round((enUso / STOCK_MAXIMO) * 100));
+
+    // Color progresivo: verde → naranja → rojo
+    let barColor = 'linear-gradient(90deg, #198754, #28a745)';
+    if(pct >= 50 && pct < 80) barColor = 'linear-gradient(90deg, #f39c12, #ffc107)';
+    if(pct >= 80) barColor = 'linear-gradient(90deg, #dc3545, #ff6b6b)';
+
+    const barEl = document.getElementById('stock-bar-uso');
+    const labelEl = document.getElementById('stock-bar-label');
+    const warningEl = document.getElementById('stock-warning');
+    const enUsoEl = document.getElementById('stock-en-uso');
+    const disponibleEl = document.getElementById('stock-disponible');
+    const totalEl = document.getElementById('stock-total');
+    const totalLabelEl = document.getElementById('stock-total-label');
+
+    if(barEl) { barEl.style.width = pct + '%'; barEl.style.background = barColor; }
+    if(labelEl) labelEl.textContent = enUso > 0 ? `${pct}% en uso` : '';
+    if(warningEl) warningEl.style.display = pct >= 85 ? 'block' : 'none';
+    if(enUsoEl) enUsoEl.textContent = enUso;
+    if(disponibleEl) disponibleEl.textContent = disponible;
+    if(totalEl) totalEl.textContent = STOCK_MAXIMO;
+    if(totalLabelEl) totalLabelEl.textContent = `${STOCK_MAXIMO} equipos`;
 }
 
 // 4. Charts - CORRECCIÓN DE ESCALA Y VISIBILIDAD DE NOMBRES
@@ -303,7 +365,9 @@ function renderAnualChart() {
             usageTotal[m]++;
             if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
             if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
-            if((d.asignatura + d.observacion).toLowerCase().includes("laboratorio")) labs[m]++;
+            const esLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
+                          || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+            if(esLab) labs[m]++;
         }
     });
 
@@ -335,7 +399,12 @@ function openModal() {
     document.getElementById('resForm').reset(); 
     document.getElementById('fId').value = ''; 
     document.getElementById('resForm').classList.remove('was-validated');
+    // Auto-rellenar con la fecha de hoy si no hay draft
+    const hoyStr = new Date().toISOString().split('T')[0];
+    document.getElementById('fFecha').value = hoyStr;
+    document.getElementById('fLab').checked = false;
     loadDraft(); 
+    fillDocentes();
     new bootstrap.Modal(document.getElementById('resModal')).show(); 
 }
 
@@ -348,10 +417,17 @@ async function saveData() {
     }
 
     document.getElementById('loading').style.display = 'flex';
-    const estado=calcEstado(document.getElementById('fChr').value,document.getElementById('fRee').value,document.getElementById('fDev').value,document.getElementById('fObs').value);
-const fechaCierre= estado==='CERRADO' ? new Date().toISOString().slice(0,10):'';
-const resp='Franco San Martín';
-const payload = {
+    const esLab = document.getElementById('fLab').checked;
+    const estado = calcEstado(
+        document.getElementById('fChr').value,
+        document.getElementById('fRee').value,
+        document.getElementById('fDev').value,
+        document.getElementById('fObs').value,
+        esLab
+    );
+    const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0,10) : '';
+    const resp = 'Franco San Martín';
+    const payload = {
         action: document.getElementById('fId').value ? 'update' : 'create',
         id: document.getElementById('fId').value,
         fecha: document.getElementById('fFecha').value,
@@ -362,12 +438,19 @@ const payload = {
         chromebooks: document.getElementById('fChr').value,
         reemplazo: document.getElementById('fRee').value,
         devueltos: document.getElementById('fDev').value,
-        observacion: document.getElementById('fObs').value, estado_operativo: estado, fecha_cierre: fechaCierre, responsable_cierre: resp
+        observacion: document.getElementById('fObs').value,
+        uso_laboratorio: esLab,
+        estado_operativo: estado,
+        fecha_cierre: fechaCierre,
+        responsable_cierre: resp
     };
     try {
         await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
         localStorage.removeItem('franco_draft');
         bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+        const accion = payload.action === 'create' ? 'creado' : 'actualizado';
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true });
+        Toast.fire({ icon: 'success', title: `Registro ${accion} correctamente` });
         load();
     } catch(e) { 
         Swal.fire('Error', 'No se pudo guardar el registro', 'error'); 
@@ -375,20 +458,41 @@ const payload = {
     }
 }
 
-function validateCounts() {
+const STOCK_MAXIMO = 115; // ← Cambia este número según tus equipos disponibles
+
+function validateCounts(autoFill) {
     const chr = parseInt(document.getElementById('fChr').value || 0);
     const ree = parseInt(document.getElementById('fRee').value || 0);
     const dev = parseInt(document.getElementById('fDev').value || 0);
     const msg = document.getElementById('valMsg');
+    const msgStock = document.getElementById('valMsgStock');
     const devInput = document.getElementById('fDev');
-    
-    if(dev !== (chr + ree)) {
+
+    // Auto-completar devueltos si está en 0 y se llama desde chr/ree
+    if(autoFill && dev === 0 && (chr + ree) > 0) {
+        devInput.value = chr + ree;
+    }
+
+    const devFinal = parseInt(devInput.value || 0);
+    if(devFinal !== (chr + ree)) {
         msg.style.display = 'block';
         devInput.classList.add('val-warning');
     } else {
         msg.style.display = 'none';
         devInput.classList.remove('val-warning');
     }
+
+    // Alerta stock máximo
+    const total = chr + ree;
+    if(msgStock) {
+        if(total > STOCK_MAXIMO) {
+            msgStock.style.display = 'block';
+            msgStock.textContent = `⚠️ Supera el stock disponible (máx. ${STOCK_MAXIMO} equipos)`;
+        } else {
+            msgStock.style.display = 'none';
+        }
+    }
+
     saveDraft();
 }
 
@@ -404,13 +508,17 @@ function editItem(id) {
     document.getElementById('fRee').value = r.reemplazo;
     document.getElementById('fDev').value = r.devueltos;
     document.getElementById('fObs').value = r.observacion;
+    // Cargar estado de laboratorio
+    const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
+                 || (r.observacion || "").toLowerCase().includes("laboratorio");
+    document.getElementById('fLab').checked = labVal;
     validateCounts();
     new bootstrap.Modal(document.getElementById('resModal')).show();
 }
 
 function saveDraft() {
     if(document.getElementById('fId').value !== "") return;
-    const draft = { fecha: document.getElementById('fFecha').value, hora: document.getElementById('fHora').value, curso: document.getElementById('fCurso').value, profesor: document.getElementById('fProfesor').value, asignatura: document.getElementById('fAsignatura').value, obs: document.getElementById('fObs').value };
+    const draft = { fecha: document.getElementById('fFecha').value, hora: document.getElementById('fHora').value, curso: document.getElementById('fCurso').value, profesor: document.getElementById('fProfesor').value, asignatura: document.getElementById('fAsignatura').value, obs: document.getElementById('fObs').value, lab: document.getElementById('fLab').checked };
     localStorage.setItem('franco_draft', JSON.stringify(draft));
 }
 
@@ -418,7 +526,7 @@ function loadDraft() {
     const saved = localStorage.getItem('franco_draft');
     if(saved) {
         const d = JSON.parse(saved);
-        document.getElementById('fFecha').value = d.fecha; document.getElementById('fHora').value = d.hora; document.getElementById('fCurso').value = d.curso; document.getElementById('fProfesor').value = d.profesor; document.getElementById('fAsignatura').value = d.asignatura; document.getElementById('fObs').value = d.obs;
+        document.getElementById('fFecha').value = d.fecha; document.getElementById('fHora').value = d.hora; document.getElementById('fCurso').value = d.curso; document.getElementById('fProfesor').value = d.profesor; document.getElementById('fAsignatura').value = d.asignatura; document.getElementById('fObs').value = d.obs; if(d.lab !== undefined) document.getElementById('fLab').checked = d.lab;
     }
 }
 
@@ -553,6 +661,174 @@ function exportToCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+
+
+// ── MEJORA 3: PDF desde tabla visible ──────────────────────────────────
+function generatePDFFiltrado() {
+    const datos = window._lastSortedData || [];
+    if(!datos || datos.length === 0) {
+        Swal.fire('Sin datos', 'No hay registros visibles para exportar.', 'info');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const mesActual = mNames[viewDate.getMonth()];
+    const anioActual = viewDate.getFullYear();
+    const ahora = new Date().toLocaleDateString('es-CL');
+    const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = logoUrl;
+
+    const buildPDF = () => {
+        // Header
+        doc.setFillColor(0, 51, 102);
+        doc.rect(0, 0, 297, 28, 'F');
+        try { doc.addImage(img, 'PNG', 268, 2, 16, 22); } catch(e) {}
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16); doc.setFont("helvetica", "bold");
+        doc.text("GESTIÓN CHROMEBOOKS 2026 – NSG", 10, 13);
+        doc.setFontSize(9); doc.setFont("helvetica", "normal");
+        doc.text(`Reporte filtrado: ${mesActual} ${anioActual}  |  Generado: ${ahora}  |  ${datos.length} registros`, 10, 22);
+
+        // Tabla
+        const body = datos.map(r => {
+            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
+            const isDamaged = (r.observacion||"").toLowerCase().includes("dañ");
+            const totalOut = parseInt(r.chromebooks||0) + parseInt(r.reemplazo||0);
+            const isOK = totalOut === parseInt(r.devueltos||0);
+            let estado = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
+            if(isDamaged) estado = r.observacion;
+            if(isLab) estado = (isLab ? '🟣 LAB | ' : '') + estado;
+            return [
+                r.fecha.split('-').reverse().slice(0,2).join('/'),
+                r.hora,
+                r.curso,
+                r.asignatura,
+                r.profesor,
+                r.chromebooks,
+                r.reemplazo,
+                r.devueltos,
+                estado
+            ];
+        });
+
+        doc.autoTable({
+            startY: 32,
+            head: [['Fecha','Bloque','Curso','Asignatura','Profesor','Chr.','Ree.','Dev.','Estado/Obs']],
+            body: body,
+            headStyles: { fillColor: [13, 104, 50], fontSize: 8, fontStyle: 'bold', textColor: 255 },
+            bodyStyles: { fontSize: 7.5 },
+            alternateRowStyles: { fillColor: [245, 250, 247] },
+            columnStyles: {
+                0: { cellWidth: 18 }, 1: { cellWidth: 16 }, 2: { cellWidth: 20 },
+                3: { cellWidth: 32 }, 4: { cellWidth: 48 },
+                5: { cellWidth: 12, halign: 'center' }, 6: { cellWidth: 12, halign: 'center' },
+                7: { cellWidth: 12, halign: 'center' }, 8: { cellWidth: 'auto' }
+            },
+            didParseCell: (data) => {
+                if(data.section === 'body') {
+                    const row = datos[data.row.index];
+                    const isDmg = (row.observacion||"").toLowerCase().includes("dañ");
+                    const isLb = row.uso_laboratorio === true || row.uso_laboratorio === "TRUE" || row.uso_laboratorio === "true";
+                    const tot = parseInt(row.chromebooks||0) + parseInt(row.reemplazo||0);
+                    const ok = tot === parseInt(row.devueltos||0);
+                    if(isDmg) data.cell.styles.fillColor = [255, 235, 235];
+                    else if(isLb) data.cell.styles.fillColor = [243, 238, 255];
+                    else if(!ok) data.cell.styles.fillColor = [255, 251, 230];
+                }
+            }
+        });
+
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for(let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8); doc.setTextColor(160);
+            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 10, 203);
+            doc.text(`Página ${i} de ${pageCount}`, 270, 203);
+        }
+
+        doc.save(`Reporte_Filtrado_${mesActual}_${anioActual}.pdf`);
+    };
+
+    img.onload = buildPDF;
+    img.onerror = buildPDF; // si no carga el logo, igual genera el PDF
+}
+
+// ── MEJORA 1: Resumen rápido por profesor ──────────────────────────────
+function verResumenProfesor(nombre) {
+    const registros = db.filter(d => d.profesor === nombre);
+    if(registros.length === 0) return;
+
+    const total = registros.length;
+    const ok = registros.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+    const pendientes = registros.filter(d => (parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0)) > parseInt(d.devueltos||0) && !d.observacion.toLowerCase().includes("dañ")).length;
+    const dañados = registros.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
+    const labs = registros.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
+    const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
+    const totalChr = registros.reduce((s,d) => s + parseInt(d.chromebooks||0), 0);
+    const totalRee = registros.reduce((s,d) => s + parseInt(d.reemplazo||0), 0);
+
+    // Últimos 3 registros
+    const ultimos = [...registros].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).slice(0,3);
+    const ultimosHTML = ultimos.map(r => {
+        const f = r.fecha.split('-').reverse().slice(0,2).join('/');
+        return `<tr><td>${f}</td><td>${r.curso}</td><td>${r.asignatura}</td><td>${r.chromebooks}</td></tr>`;
+    }).join('');
+
+    Swal.fire({
+        title: `<span style="color:#2b5797">👤 ${nombre}</span>`,
+        html: `
+        <div style="text-align:left; font-size:0.9rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
+                <div style="background:#f0fff4; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.6rem; font-weight:900; color:#0d6832">${total}</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">PRÉSTAMOS</div>
+                </div>
+                <div style="background:#fff8f0; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.6rem; font-weight:900; color:#f39c12">${pendientes}</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">PENDIENTES</div>
+                </div>
+                <div style="background:#f8f0ff; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.6rem; font-weight:900; color:#6f42c1">${labs}</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">LABORATORIO</div>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
+                <div style="background:#f0f4ff; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:900; color:#2b5797">${tasa}%</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">TASA RETORNO</div>
+                </div>
+                <div style="background:#f5f5f5; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:900; color:#333">${totalChr}</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">CHR. TOTALES</div>
+                </div>
+                <div style="background:#fff5f5; border-radius:8px; padding:10px; text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:900; color:#d32f2f">${dañados}</div>
+                    <div style="font-size:0.72rem; color:#666; font-weight:600">CON DAÑOS</div>
+                </div>
+            </div>
+            <div style="font-weight:700; color:#555; font-size:0.8rem; margin-bottom:6px;">ÚLTIMOS REGISTROS</div>
+            <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                <thead><tr style="background:#f8f9fa; color:#555;">
+                    <th style="padding:5px 8px; text-align:left;">Fecha</th>
+                    <th style="padding:5px 8px;">Curso</th>
+                    <th style="padding:5px 8px;">Asignatura</th>
+                    <th style="padding:5px 8px;">Chr.</th>
+                </tr></thead>
+                <tbody>${ultimosHTML}</tbody>
+            </table>
+        </div>`,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: 520,
+        customClass: { popup: 'shadow-lg' }
+    });
 }
 
 window.onload = load;
