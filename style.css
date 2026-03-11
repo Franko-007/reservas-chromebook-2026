@@ -193,19 +193,26 @@ thead th {
     z-index: 10; 
 }
 
-.row-lab { 
-    background-color: #fcfaff !important; 
+.row-lab td { 
+    background-color: #f5f0ff !important; 
+}
+.row-lab td:first-child { 
     border-left: 6px solid var(--purple-lab) !important; 
+    background-color: #ede7f6 !important;
 }
 
-.row-pending { 
-    border-left: 6px solid #ffc107 !important; 
+.row-pending td { 
     background-color: #fffdf5 !important; 
 }
+.row-pending td:first-child { 
+    border-left: 6px solid #ffc107 !important; 
+}
 
-.row-damaged { 
-    border-left: 6px solid var(--danger-red) !important; 
+.row-damaged td { 
     background-color: #fff5f5 !important; 
+}
+.row-damaged td:first-child { 
+    border-left: 6px solid var(--danger-red) !important; 
 }
 
 .badge-status { 
@@ -256,4 +263,21 @@ thead th {
     margin-bottom: 20px; 
     color: #856404; 
     font-weight: 500; 
+}
+/* ── KPI Préstamos de la Semana ─────────────────────── */
+@keyframes kpi-semana-pulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    50%       { box-shadow: 0 4px 20px rgba(25,118,210,0.22); }
+}
+
+#kpiPendientesCard:hover,
+.kpi-pendientes-card:hover {
+    border-color: #e53935 !important;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(229,57,53,0.22) !important;
+}
+
+@keyframes kpi-pendiente-pulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    50%       { box-shadow: 0 4px 20px rgba(229,57,53,0.25); }
 }
