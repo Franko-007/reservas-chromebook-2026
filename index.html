@@ -51,22 +51,34 @@
         </div>
 
         <div class="kpi-row">
+            <!-- 1. Total Préstamos del Mes -->
             <div class="kpi-card" onclick="resetApp()">
-                <h6>Total Préstamos</h6>
+                <h6>Total Préstamos del Mes</h6>
                 <div id="kpi-total" style="color: #107c41">0</div>
             </div>
+            <!-- 2. Préstamos de la Semana (NUEVO - reemplaza Pendientes) -->
+            <div class="kpi-card" onclick="irASemanActual()" style="position:relative; overflow:hidden;">
+                <div id="kpiSemanaGlow" style="display:none; position:absolute; inset:0; background:linear-gradient(135deg,rgba(21,101,192,0.07),rgba(13,71,161,0.04)); border-radius:12px; pointer-events:none;"></div>
+                <h6 style="color:#1565c0;">Préstamos esta Semana</h6>
+                <div id="kpi-semana" style="color:#1976d2; position:relative;">0</div>
+                <div id="kpiSemanaLabel" style="font-size:0.65rem; color:#999; margin-top:4px; font-weight:600;">lun – vie</div>
+            </div>
+            <!-- 3. Uso de Laboratorio -->
             <div class="kpi-card" onclick="setFilterMode('lab')">
                 <h6>Uso de Laboratorio</h6>
                 <div id="kpi-lab" style="color: #6f42c1">0</div>
             </div>
+            <!-- 4. Uso de Reemplazos -->
             <div class="kpi-card" onclick="setFilterMode('reemp')">
                 <h6>Uso de Reemplazos</h6>
                 <div id="kpi-reemp" style="color: #dc3545">0</div>
             </div>
+            <!-- 5. Tasa Retorno OK -->
             <div class="kpi-card" onclick="setFilterMode('ok')">
                 <h6>Tasa Retorno OK</h6>
                 <div id="kpi-ok" style="color: #198754">0%</div>
             </div>
+            <!-- 6. Dañados -->
             <div class="kpi-card" onclick="setFilterMode('damaged')">
                 <h6>Dañados</h6>
                 <div id="kpi-damaged" style="color: var(--danger-red)">0</div>
@@ -100,6 +112,8 @@
             <span id="debtText">⚠️ Cargando alertas...</span>
             <button class="btn btn-sm btn-warning ms-3 fw-bold" onclick="setFilterMode('debt')">Ver Pendientes</button>
         </div>
+
+
 
         <div class="main-grid">
             <div class="content-card">
@@ -143,7 +157,6 @@
                         </thead>
                         <tbody id="tableBody"></tbody>
                     </table>
-                    
                     <div id="emptyState" class="text-center py-5" style="display: none;">
                         <img src="https://cdn-icons-png.flaticon.com/512/7486/7486754.png" width="80" style="opacity: 0.5; margin-bottom: 15px;">
                         <h6 class="text-muted fw-bold">No se encontraron registros</h6>
@@ -181,13 +194,14 @@
                 <form id="resForm" class="row g-3 needs-validation" novalidate>
                     <input type="hidden" id="fId"><input type="hidden" id="fEstado"><input type="hidden" id="fFechaCierre"><input type="hidden" id="fRespCierre"><input type="hidden" id="fLabHidden">
                     <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control" onchange="saveDraft()" required></div>
-                    <div class="col-md-6"><label class="fw-bold small text-muted">BLOQUE</label>
-                        <select id="fHora" class="form-select" onchange="saveDraft()" required>
-                            <option value="08:10">08:10</option><option value="10:00">10:00</option>
-                            <option value="11:50">11:50</option><option value="14:00">14:00</option>
-                        </select>
+                    <div class="col-md-6">
+                        <label class="fw-bold small text-muted">HORA DE AGENDA</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0"><small>🕐</small></span>
+                            <input type="time" id="fHora" class="form-control" oninput="saveDraft()" placeholder="HH:MM" required>
+                        </div>
+                        <small class="text-muted" style="font-size:0.7rem;">Ingrese la hora manualmente (ej: 08:10)</small>
                     </div>
-
                     <div class="col-md-6">
                         <label class="fw-bold small text-muted">CURSO</label>
                         <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
@@ -210,9 +224,7 @@
                             </optgroup>
                         </select>
                     </div>
-
                     <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()" required></div>
-                    
                     <div class="col-12">
                         <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
                         <div class="d-flex gap-2 align-items-center">
@@ -222,7 +234,6 @@
                             <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
                         </div>
                     </div>
-                    
                     <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
                     <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
                     <div class="col-md-4">
@@ -231,7 +242,6 @@
                         <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
                         <small id="valMsgStock" class="text-warning fw-bold" style="display:none; background:#fff3cd; padding:2px 8px; border-radius:4px;"></small>
                     </div>
-                    
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#f3f0ff; border: 1.5px solid #6f42c1;">
                             <div>
@@ -245,15 +255,30 @@
                             </div>
                         </div>
                     </div>
-
-                    <div class="col-12"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
-                        <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()">
+                    <div class="col-12" id="obsSelectWrapper"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
+                        <div id="obsNuevaReservaInfo" class="d-flex align-items-center gap-2 p-2 rounded-2" style="background:#eceff1; border:1.5px solid #b0bec5;">
+                            <span style="font-size:1.1rem;">🕐</span>
+                            <div>
+                                <div style="font-size:0.82rem; font-weight:700; color:#546e7a;">Se registrará como <b>"Pendiente"</b> automáticamente</div>
+                                <div style="font-size:0.7rem; color:#90a4ae;">Podrás editarla una vez que el docente devuelva los equipos</div>
+                            </div>
+                        </div>
+                        <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()" style="display:none;">
                             <option value="Sin novedad">✅ Sin novedad</option>
                             <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
                             <option value="Teclado Falla">🟠 Teclado Falla</option>
                             <option value="No Enciende">⚫ No Enciende</option>
-
                         </select>
+                    </div>
+                    <div class="col-12" id="obsEditWrapper" style="display:none;">
+                        <label class="fw-bold small text-muted d-flex align-items-center gap-2">
+                            OBSERVACIÓN TÉCNICO 
+                            <span class="badge bg-success" style="font-size:0.65rem;">✏️ EDITABLE – Equipos devueltos</span>
+                        </label>
+                        <textarea id="fObsEdit" class="form-control border-success shadow-sm" rows="2" 
+                                  placeholder="Ingrese observación del técnico tras la devolución..." 
+                                  oninput="saveDraft()" style="resize:none; font-size:0.9rem;"></textarea>
+                        <small class="text-success fw-bold" style="font-size:0.7rem;">🔓 Este campo es editable porque los equipos ya fueron devueltos</small>
                     </div>
                 </form>
             </div>
