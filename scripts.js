@@ -18,7 +18,7 @@ function calcEstado(chr,ree,dev,obs,lab){
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
 }
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJwFQ73wPGU5fQY-xO3hvxlqTY3ix_5XAa0DZhxKdD1bny361TDCMf_ImuFoywA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHI_6GzuaT1BoJWhoMh-6YF_08AsLksgmGO9ImkDTmpKB9nT2SkRZaz0mKPIyGB8k/exec";
 // Inicializar con la fecha actual
 const _hoy = new Date();
 const _diaHoy = _hoy.getDate();
@@ -160,37 +160,65 @@ function renderAll() {
         const contadorEl = document.getElementById('recordCount');
         if(contadorEl) contadorEl.textContent = `${sorted.length} registro${sorted.length !== 1 ? 's' : ''}`;
 
-        tableBody.innerHTML = sorted.map(r => {
+        // Agrupar por día con separadores
+        const diasSemana = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        let lastDay = null;
+        const rows = [];
+        sorted.forEach(r => {
             const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
             const isOK = totalOut === parseInt(r.devueltos);
             const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
             const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
                        || (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
-            
+
+            // ── Separador de día ──
+            if (r.fecha !== lastDay) {
+                lastDay = r.fecha;
+                const fechaObj = new Date(r.fecha + "T00:00:00");
+                const diaNombre = diasSemana[fechaObj.getDay()];
+                const fechaFmt = r.fecha.split('-').reverse().slice(0,2).join('/');
+                const registrosDia = sorted.filter(x => x.fecha === r.fecha);
+                const labsDia = registrosDia.filter(x => x.uso_laboratorio === true || x.uso_laboratorio === "TRUE" || x.uso_laboratorio === "true").length;
+                const labBadge = labsDia > 0
+                    ? `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>`
+                    : '';
+                rows.push(`<tr class="day-separator-row">
+                    <td colspan="10" style="background:linear-gradient(90deg,#f0f4f8,#fafbfc);border-left:4px solid #0d6832;padding:7px 14px;font-size:0.78rem;font-weight:800;color:#2c3e50;letter-spacing:0.5px;text-transform:uppercase;">
+                        📅 ${diaNombre} ${fechaFmt}
+                        <span style="background:#e8f5e9;color:#0d6832;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;margin-left:8px;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
+                        ${labBadge}
+                    </td>
+                </tr>`);
+            }
+
             let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
-            // Badge de estado (devolución/pendiente/dañado)
-            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
-            let estadoColor = isOK ? '#198754' : '#ffc107';
-            let estadoTextColor = isOK ? 'white' : '#444';
+            const isPendienteObs = (r.observacion || "").toLowerCase() === "pendiente";
+            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : isPendienteObs ? 'PENDIENTE' : 'ACTIVO';
+            let estadoColor = isOK ? '#198754' : isPendienteObs ? '#f9a825' : '#ffc107';
+            let estadoTextColor = isOK ? 'white' : isPendienteObs ? '#fff' : '#444';
             if(isDamaged) { estadoTexto = r.observacion; estadoColor = 'var(--danger-red)'; estadoTextColor = 'white'; }
 
-            // Construir celda de estado: laboratorio + estado pueden coexistir
-            const badgeLab = isLab ? `<span class="badge badge-status me-1" style="background:var(--purple-lab);color:white">🟣 LAB</span>` : '';
+            const badgeLab = isLab
+                ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#6f42c1,#9b59b6);color:white;box-shadow:0 2px 6px rgba(111,66,193,0.4);">🟣 LABORATORIO</span>`
+                : '';
             const badgeEstado = `<span class="badge badge-status" style="background:${estadoColor};color:${estadoTextColor}">${estadoTexto}</span>`;
 
-            return `<tr class="${rowClass}">
-                <td>${r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
-                <td><span class="badge bg-light text-dark border">${r.hora}</span></td>
-                <td>${r.curso}</td><td>${r.asignatura}</td>
-                <td class="text-start fw-bold" style="color:#2b5797; cursor:pointer; text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
+            rows.push(`<tr class="${rowClass}">
+                <td><span class="text-muted" style="font-size:0.78rem;">${r.fecha.split('-').reverse().slice(0,2).join('/')}</span></td>
+                <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
+                <td>${r.curso}</td>
+                <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
+                <td class="text-start fw-bold" style="color:#2b5797;cursor:pointer;text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
                 <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
                 <td class="text-success fw-bold">${r.devueltos}</td>
                 <td>${badgeLab}${badgeEstado}</td>
                 <td><div class="d-flex justify-content-center gap-1">
-                    <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar: ${r.profesor} – ${r.fecha}">✏️</button>
-                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar: ${r.profesor} – ${r.fecha}">🗑️</button>
-                </div></td></tr>`;
-        }).join('');
+                    <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
+                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
+                </div></td>
+            </tr>`);
+        });
+        tableBody.innerHTML = rows.join('');
     }
 
     // Banner de deudas
@@ -207,14 +235,8 @@ function renderAll() {
     updateCharts(baseFiltered); 
 }
 
-// 3. KPIs
+// 3. KPIs - siempre sobre el mes completo, KPI semana sigue el tab activo
 function updateKPIs(base) {
-    const lab = base.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
-                           || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
-    const reemp = base.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-    const ok = base.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const dmg = base.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
-    
     function animateKPI(id, val) {
         const el = document.getElementById(id);
         if(!el) return;
@@ -222,11 +244,53 @@ function updateKPIs(base) {
         el.style.opacity = '0';
         setTimeout(() => { el.innerText = val; el.style.opacity = '1'; }, 200);
     }
-    animateKPI('kpi-total', base.length);
-    animateKPI('kpi-lab', lab);
-    animateKPI('kpi-reemp', reemp);
-    animateKPI('kpi-damaged', dmg);
-    animateKPI('kpi-ok', base.length > 0 ? Math.round((ok / base.length) * 100) + "%" : "0%");
+
+    // Mes completo independiente del tab de semana activo
+    const mesCompleto = db.filter(d => {
+        const date = new Date(d.fecha + "T00:00:00");
+        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+    });
+    const labMes   = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+    const reempMes = mesCompleto.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+    const okMes    = mesCompleto.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+    const dmgMes   = mesCompleto.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
+
+    animateKPI('kpi-total',   mesCompleto.length);
+    animateKPI('kpi-lab',     labMes);
+    animateKPI('kpi-reemp',   reempMes);
+    animateKPI('kpi-damaged', dmgMes);
+    animateKPI('kpi-ok', mesCompleto.length > 0 ? Math.round((okMes / mesCompleto.length) * 100) + "%" : "0%");
+
+    // KPI semana: sigue exactamente el tab activo
+    let prestSemana, labelSemTxt;
+    if (currentWeek === 0) {
+        // "Mes Completo" → semana laboral real (lunes–viernes de hoy)
+        const hoyKpi = new Date(); hoyKpi.setHours(0,0,0,0);
+        const lunesKpi = new Date(hoyKpi);
+        lunesKpi.setDate(hoyKpi.getDate() - ((hoyKpi.getDay() + 6) % 7));
+        const viernesKpi = new Date(lunesKpi);
+        viernesKpi.setDate(lunesKpi.getDate() + 6); // incluye fin de semana
+        prestSemana = mesCompleto.filter(d => {
+            const f = new Date(d.fecha + "T00:00:00");
+            return f >= lunesKpi && f <= viernesKpi;
+        }).length;
+        labelSemTxt = `${lunesKpi.getDate()}/${lunesKpi.getMonth()+1} – ${viernesKpi.getDate()}/${viernesKpi.getMonth()+1}`;
+    } else {
+        // Semana 1–4: días exactos del tab (mismo rango que usa la tabla)
+        const diaInicio = (currentWeek - 1) * 7 + 1;
+        const diaFin    = currentWeek * 7;
+        prestSemana = mesCompleto.filter(d => {
+            const dia = new Date(d.fecha + "T00:00:00").getDate();
+            return dia >= diaInicio && dia <= diaFin;
+        }).length;
+        const diasEnMes = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate();
+        labelSemTxt = `días ${diaInicio}–${Math.min(diaFin, diasEnMes)}`;
+    }
+    animateKPI('kpi-semana', prestSemana);
+    const labelSemana = document.getElementById('kpiSemanaLabel');
+    const glowSemana  = document.getElementById('kpiSemanaGlow');
+    if (labelSemana) labelSemana.textContent = labelSemTxt;
+    if (glowSemana)  glowSemana.style.display = prestSemana > 0 ? 'block' : 'none';
 
     // ── Barra de stock en tiempo real ──────────────────────────────────
     // Equipos "en préstamo" = registros ACTIVOS del mes (pendientes de devolución)
@@ -394,6 +458,23 @@ function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll();
 function setFilterWeek(w) { currentWeek = w; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w)); renderAll(); }
 function setFilterMode(m) { filterMode = m; renderAll(); }
 function resetApp() { filterMode = 'all'; currentWeek = 0; document.getElementById('searchBox').value = ''; document.getElementById('courseSelect').value = ''; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); renderAll(); }
+
+function irASemanActual() {
+    const hoy = new Date();
+    viewDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    filterMode = 'all';
+    document.getElementById('searchBox').value = '';
+    document.getElementById('courseSelect').value = '';
+    const dia = hoy.getDate();
+    const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
+    currentWeek = semana;
+    document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === semana));
+    renderAll();
+    setTimeout(() => {
+        const tabla = document.getElementById('mainTable');
+        if (tabla) tabla.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+}
 
 function openModal() { 
     document.getElementById('resForm').reset(); 
