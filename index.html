@@ -115,7 +115,7 @@
 
 
 
-        <div class="main-grid">
+        <div class="px-4 mb-4">
             <div class="content-card">
                 <div class="row g-2 mb-4">
                     <div class="col-md-7">
@@ -164,28 +164,34 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="d-flex flex-column gap-4">
-                <div class="content-card">
-                    <h6 class="fw-bold mb-3 text-muted">Préstamos por Docente</h6>
-                    <div class="chart-box"><canvas id="chartDocente"></canvas></div>
+        <!-- Gráficos debajo del panel principal -->
+        <div class="px-4 mb-4">
+            <div class="row g-4">
+                <div class="col-lg-5">
+                    <div class="content-card h-100">
+                        <h6 class="fw-bold mb-3 text-muted">Préstamos por Docente</h6>
+                        <div class="chart-box"><canvas id="chartDocente"></canvas></div>
+                    </div>
                 </div>
-                <div class="content-card">
-                    <h6 class="fw-bold mb-3 text-muted">Estado General Equipos</h6>
-                    <div class="chart-box"><canvas id="chartStatus"></canvas></div>
+                <div class="col-lg-3">
+                    <div class="content-card h-100">
+                        <h6 class="fw-bold mb-3 text-muted">Estado General Equipos</h6>
+                        <div class="chart-box"><canvas id="chartStatus"></canvas></div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="content-card h-100 shadow-sm border-0">
+                        <h5 class="fw-bold text-success mb-3">📈 Préstamos Mensuales 2026</h5>
+                        <div style="height: 250px; width: 100%;">
+                            <canvas id="chartAnual"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div class="px-4 mt-4">
-            <div class="content-card shadow-sm border-0">
-                <h5 class="fw-bold text-success mb-4">📈 Préstamos Mensuales 2026</h5>
-                <div style="height: 300px; width: 100%;">
-                    <canvas id="chartAnual"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
+    </div><!-- /container-fluid -->
 
     <div class="modal fade" id="resModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg">
@@ -222,6 +228,9 @@
                                 <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
                                 <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
                             </optgroup>
+                            <optgroup label="Especial">
+                                <option value="ELECTIVO">ELECTIVO</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()" required></div>
@@ -235,12 +244,68 @@
                         </div>
                     </div>
                     <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
-                    <div class="col-md-4"><label class="fw-bold small text-danger">REEMPLAZOS</label><input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
+                    <div class="col-md-4">
+                        <label class="fw-bold small text-danger">REEMPLAZOS</label>
+                        <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(true); toggleNroEquipo()" value="0" min="0">
+                    </div>
                     <div class="col-md-4">
                         <label class="fw-bold small text-success">DEVUELTOS</label>
                         <input type="number" id="fDev" class="form-control" oninput="validateCounts()" value="0" min="0">
                         <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
                         <small id="valMsgStock" class="text-warning fw-bold" style="display:none; background:#fff3cd; padding:2px 8px; border-radius:4px;"></small>
+                    </div>
+                    <!-- N° Equipo de Reemplazo -->
+                    <div class="col-12" id="nroEquipoWrapper" style="display:none;">
+                        <div class="p-3 rounded-3" style="background:#fff5f5; border:1.5px solid #dc3545;">
+                            <label class="fw-bold small text-danger d-block mb-2">🔴 EQUIPO DE REEMPLAZO ASIGNADO</label>
+                            <div class="d-flex gap-2 flex-wrap" id="equipoReemplazoOpciones">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq1" value="Equipo 1" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq1" style="color:#b71c1c;">📦 Equipo 1</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq2" value="Equipo 2" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq2" style="color:#b71c1c;">📦 Equipo 2</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq3" value="Equipo 3" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq3" style="color:#b71c1c;">📦 Equipo 3</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq4" value="Equipo 4" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq4" style="color:#b71c1c;">📦 Equipo 4</label>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.7rem;">Selecciona el equipo de reemplazo que se entregó al docente</small>
+                        </div>
+                    </div>
+                    <!-- Estado de Devolución -->
+                    <div class="col-12">
+                        <div class="p-3 rounded-3" style="background:#f0f9ff; border:1.5px solid #0288d1;">
+                            <label class="fw-bold small d-block mb-2" style="color:#0277bd; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.5px;">📋 ESTADO DE LA DEVOLUCIÓN</label>
+                            <div class="d-flex gap-2 flex-wrap" id="estadoDevWrapper">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edOk" value="ok" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-success" for="edOk">✅ Sin novedad</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edPendiente" value="pendiente" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-warning" for="edPendiente">⏳ Pendiente</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edDanio" value="danio" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-danger" for="edDanio">🔴 Con daño</label>
+                                </div>
+                            </div>
+                            <!-- Campo tipo de daño (visible solo si se marca "Con daño") -->
+                            <div id="tipoDanioWrapper" style="display:none; margin-top:10px;">
+                                <label class="fw-bold small text-danger mb-1 d-block">TIPO DE DAÑO</label>
+                                <input type="text" id="fTipoDanio" class="form-control border-danger" 
+                                       placeholder="Describe el daño (ej: pantalla rayada, tecla rota...)" 
+                                       oninput="saveDraft()">
+                                <small class="text-muted" style="font-size:0.7rem;">Ingrese el tipo de daño manualmente</small>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#f3f0ff; border: 1.5px solid #6f42c1;">
