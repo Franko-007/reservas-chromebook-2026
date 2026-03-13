@@ -18,7 +18,7 @@ function calcEstado(chr,ree,dev,obs,lab){
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
 }
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHI_6GzuaT1BoJWhoMh-6YF_08AsLksgmGO9ImkDTmpKB9nT2SkRZaz0mKPIyGB8k/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxN2XQAMGfzqDHYkAdfdPrkQ6d6Mni72WRZajuQyyewjDhVAdemvVuUrN0SUY54x_o/exec";
 // Inicializar con la fecha actual
 const _hoy = new Date();
 const _diaHoy = _hoy.getDate();
@@ -183,10 +183,13 @@ function renderAll() {
                     ? `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>`
                     : '';
                 rows.push(`<tr class="day-separator-row">
-                    <td colspan="10" style="background:linear-gradient(90deg,#f0f4f8,#fafbfc);border-left:4px solid #0d6832;padding:7px 14px;font-size:0.78rem;font-weight:800;color:#2c3e50;letter-spacing:0.5px;text-transform:uppercase;">
-                        📅 ${diaNombre} ${fechaFmt}
-                        <span style="background:#e8f5e9;color:#0d6832;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;margin-left:8px;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
-                        ${labBadge}
+                    <td colspan="10" style="background:linear-gradient(90deg,#e0f4f1,#f0faf8,#e8f6f3);border-left:5px solid #00897b;border-top:1px solid #b2dfdb;border-bottom:1px solid #b2dfdb;padding:8px 16px;font-size:0.78rem;font-weight:800;color:#00695c;letter-spacing:0.8px;text-transform:uppercase;">
+                        <span style="display:inline-flex;align-items:center;gap:8px;">
+                            <span style="background:#00897b;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;">📅 ${diaNombre}</span>
+                            <span style="color:#00897b;font-weight:900;">${fechaFmt}</span>
+                            <span style="background:#e0f2f1;color:#00695c;border:1px solid #80cbc4;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
+                            ${labBadge}
+                        </span>
                     </td>
                 </tr>`);
             }
@@ -209,9 +212,14 @@ function renderAll() {
                 <td>${r.curso}</td>
                 <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
                 <td class="text-start fw-bold" style="color:#2b5797;cursor:pointer;text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
-                <td>${r.chromebooks}</td><td class="text-danger">${r.reemplazo}</td>
+                <td>${r.chromebooks}</td>
+                <td class="text-danger fw-bold">${r.reemplazo}</td>
                 <td class="text-success fw-bold">${r.devueltos}</td>
-                <td>${badgeLab}${badgeEstado}</td>
+                <td>
+                    ${badgeLab}
+                    ${(parseInt(r.reemplazo||0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#b71c1c,#e53935);color:white;box-shadow:0 2px 5px rgba(183,28,28,0.35);">📦 ${r.nro_equipo_reemplazo}</span>` : ''}
+                    ${badgeEstado}
+                </td>
                 <td><div class="d-flex justify-content-center gap-1">
                     <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
@@ -476,6 +484,19 @@ function irASemanActual() {
     }, 150);
 }
 
+function toggleNroEquipo() {
+    const ree = parseInt(document.getElementById('fRee').value || 0);
+    const wrapper = document.getElementById('nroEquipoWrapper');
+    if(wrapper) wrapper.style.display = ree > 0 ? 'block' : 'none';
+}
+
+function onEstadoDevChange() {
+    const val = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
+    if(tipoDanioWrapper) tipoDanioWrapper.style.display = val === 'danio' ? 'block' : 'none';
+    saveDraft();
+}
+
 function openModal() { 
     document.getElementById('resForm').reset(); 
     document.getElementById('fId').value = ''; 
@@ -484,6 +505,14 @@ function openModal() {
     const hoyStr = new Date().toISOString().split('T')[0];
     document.getElementById('fFecha').value = hoyStr;
     document.getElementById('fLab').checked = false;
+    // Reset nuevos campos
+    document.querySelectorAll('input[name="fEstadoDev"]').forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="fNroEquipo"]').forEach(r => r.checked = false);
+    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
+    if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
+    if(nroEquipoWrapper) nroEquipoWrapper.style.display = 'none';
+    if(document.getElementById('fTipoDanio')) document.getElementById('fTipoDanio').value = '';
     loadDraft(); 
     fillDocentes();
     new bootstrap.Modal(document.getElementById('resModal')).show(); 
@@ -499,15 +528,32 @@ async function saveData() {
 
     document.getElementById('loading').style.display = 'flex';
     const esLab = document.getElementById('fLab').checked;
+
+    // Resolver observacion desde el nuevo estado de devolución
+    const estadoDevSeleccionado = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    let obsValue = '';
+    if (estadoDevSeleccionado === 'ok') {
+        obsValue = 'Sin novedad';
+    } else if (estadoDevSeleccionado === 'pendiente') {
+        obsValue = 'Pendiente';
+    } else if (estadoDevSeleccionado === 'danio') {
+        const tipoDanio = (document.getElementById('fTipoDanio')?.value || '').trim();
+        obsValue = tipoDanio || 'Dañado';
+    } else {
+        // Si no se seleccionó nada, usar el valor del fObs legacy (edición)
+        obsValue = document.getElementById('fObs')?.value || 'Pendiente';
+    }
+
     const estado = calcEstado(
         document.getElementById('fChr').value,
         document.getElementById('fRee').value,
         document.getElementById('fDev').value,
-        document.getElementById('fObs').value,
+        obsValue,
         esLab
     );
     const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0,10) : '';
     const resp = 'Franco San Martín';
+    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
     const payload = {
         action: document.getElementById('fId').value ? 'update' : 'create',
         id: document.getElementById('fId').value,
@@ -519,7 +565,8 @@ async function saveData() {
         chromebooks: document.getElementById('fChr').value,
         reemplazo: document.getElementById('fRee').value,
         devueltos: document.getElementById('fDev').value,
-        observacion: document.getElementById('fObs').value,
+        observacion: obsValue,
+        nro_equipo_reemplazo: nroEquipo,
         uso_laboratorio: esLab,
         estado_operativo: estado,
         fecha_cierre: fechaCierre,
@@ -583,23 +630,69 @@ function editItem(id) {
     document.getElementById('fFecha').value = r.fecha;
     document.getElementById('fHora').value = r.hora;
     document.getElementById('fCurso').value = r.curso;
+    fillDocentes();
     document.getElementById('fProfesor').value = r.profesor;
     document.getElementById('fAsignatura').value = r.asignatura;
     document.getElementById('fChr').value = r.chromebooks;
     document.getElementById('fRee').value = r.reemplazo;
     document.getElementById('fDev').value = r.devueltos;
     document.getElementById('fObs').value = r.observacion;
+
     // Cargar estado de laboratorio
     const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
                  || (r.observacion || "").toLowerCase().includes("laboratorio");
     document.getElementById('fLab').checked = labVal;
+
+    // Cargar N° equipo de reemplazo
+    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
+    const ree = parseInt(r.reemplazo || 0);
+    if(nroEquipoWrapper) nroEquipoWrapper.style.display = ree > 0 ? 'block' : 'none';
+    document.querySelectorAll('input[name="fNroEquipo"]').forEach(rb => rb.checked = false);
+    if(r.nro_equipo_reemplazo) {
+        const rbEq = document.querySelector(`input[name="fNroEquipo"][value="${r.nro_equipo_reemplazo}"]`);
+        if(rbEq) rbEq.checked = true;
+    }
+
+    // Cargar estado de devolución
+    const obs = (r.observacion || "").toLowerCase();
+    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
+    document.querySelectorAll('input[name="fEstadoDev"]').forEach(rb => rb.checked = false);
+    if(obs === 'sin novedad' || obs === '') {
+        const edOk = document.getElementById('edOk');
+        if(edOk) edOk.checked = true;
+        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    } else if(obs === 'pendiente') {
+        const edPend = document.getElementById('edPendiente');
+        if(edPend) edPend.checked = true;
+        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    } else if(obs.includes('dañ') || obs.includes('falla') || obs.includes('no enciende')) {
+        const edDanio = document.getElementById('edDanio');
+        if(edDanio) edDanio.checked = true;
+        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'block';
+        const fTipoDanio = document.getElementById('fTipoDanio');
+        if(fTipoDanio) fTipoDanio.value = r.observacion;
+    }
+
     validateCounts();
     new bootstrap.Modal(document.getElementById('resModal')).show();
 }
 
 function saveDraft() {
     if(document.getElementById('fId').value !== "") return;
-    const draft = { fecha: document.getElementById('fFecha').value, hora: document.getElementById('fHora').value, curso: document.getElementById('fCurso').value, profesor: document.getElementById('fProfesor').value, asignatura: document.getElementById('fAsignatura').value, obs: document.getElementById('fObs').value, lab: document.getElementById('fLab').checked };
+    const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
+    const draft = { 
+        fecha: document.getElementById('fFecha').value, 
+        hora: document.getElementById('fHora').value, 
+        curso: document.getElementById('fCurso').value, 
+        profesor: document.getElementById('fProfesor').value, 
+        asignatura: document.getElementById('fAsignatura').value, 
+        obs: document.getElementById('fObs').value, 
+        lab: document.getElementById('fLab').checked,
+        nroEquipo: nroEquipo,
+        estadoDev: estadoDev,
+        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
+    };
     localStorage.setItem('franco_draft', JSON.stringify(draft));
 }
 
@@ -607,7 +700,25 @@ function loadDraft() {
     const saved = localStorage.getItem('franco_draft');
     if(saved) {
         const d = JSON.parse(saved);
-        document.getElementById('fFecha').value = d.fecha; document.getElementById('fHora').value = d.hora; document.getElementById('fCurso').value = d.curso; document.getElementById('fProfesor').value = d.profesor; document.getElementById('fAsignatura').value = d.asignatura; document.getElementById('fObs').value = d.obs; if(d.lab !== undefined) document.getElementById('fLab').checked = d.lab;
+        document.getElementById('fFecha').value = d.fecha; 
+        document.getElementById('fHora').value = d.hora; 
+        document.getElementById('fCurso').value = d.curso; 
+        document.getElementById('fProfesor').value = d.profesor; 
+        document.getElementById('fAsignatura').value = d.asignatura; 
+        document.getElementById('fObs').value = d.obs; 
+        if(d.lab !== undefined) document.getElementById('fLab').checked = d.lab;
+        if(d.nroEquipo) {
+            const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
+            if(rb) rb.checked = true;
+            toggleNroEquipo();
+        }
+        if(d.estadoDev) {
+            const rb = document.querySelector(`input[name="fEstadoDev"][value="${d.estadoDev}"]`);
+            if(rb) { rb.checked = true; onEstadoDevChange(); }
+        }
+        if(d.tipoDanio && document.getElementById('fTipoDanio')) {
+            document.getElementById('fTipoDanio').value = d.tipoDanio;
+        }
     }
 }
 
