@@ -26,7 +26,7 @@ const _semanaInicial = _diaHoy <= 7 ? 1 : _diaHoy <= 14 ? 2 : _diaHoy <= 21 ? 3 
 let db = [], viewDate = new Date(_hoy.getFullYear(), _hoy.getMonth(), 1), filterMode = 'all', currentWeek = _semanaInicial, charts = {};
 const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-const DOCENTES_NSG = ["ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO","AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ","CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO","CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA","DEBORA GAETE","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS","FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS","GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA","KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS","LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN","MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES","NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ","PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA","STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"];
+const DOCENTES_NSG = ["ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO","AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ","CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO","CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA","DEBORA GAETE","DEBORA GONZÁLEZ","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS","FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS","GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA","KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS","LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN","MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES","NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ","PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA","STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"];
 
 // Función debounce para búsqueda suave
 let debounceTimer;
@@ -810,6 +810,19 @@ function generatePDF() {
     img.src = logoUrl;
 
     const buildPDF = () => {
+        const pageStats = document.getElementById('pageStats');
+        const pageReg   = document.getElementById('pageRegistros');
+
+        const restorePages = () => {
+            if(pageStats) pageStats.style.display = 'none';
+            if(pageReg)   pageReg.style.display   = 'block';
+            // Volver al estado correcto del botón
+            const btnStat = document.getElementById('btnPageStats');
+            const btnReg  = document.getElementById('btnPageRegistros');
+            if(btnStat) { btnStat.style.background='white'; btnStat.style.color='#555'; btnStat.style.border='1.5px solid #ddd'; }
+            if(btnReg)  { btnReg.style.background='#0d6832'; btnReg.style.color='white'; btnReg.style.border='1.5px solid #0d6832'; }
+        };
+
         // ══════════════════════════════════════
         // PÁGINA 1 – RESUMEN EJECUTIVO
         // ══════════════════════════════════════
@@ -932,6 +945,141 @@ function generatePDF() {
         });
 
         // ══════════════════════════════════════
+        // PÁGINA 2 – DASHBOARD VISUAL
+        // ══════════════════════════════════════
+        doc.addPage();
+
+        // Header página 2
+        doc.setFillColor(0, 51, 102);
+        doc.rect(0, 0, 210, 22, 'F');
+        try { doc.addImage(img, 'PNG', 184, 1, 14, 18); } catch(e) {}
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(13); doc.setFont("helvetica","bold");
+        doc.text("DASHBOARD - ANALISIS VISUAL", 14, 10);
+        doc.setFontSize(8); doc.setFont("helvetica","normal");
+        doc.text(`${mesActual.toUpperCase()} ${anioActual}  |  ${total} prestamos registrados  |  Tasa de retorno: ${tasa}%`, 14, 17);
+
+        // ── Fila 1: Estado General (izq) + Préstamos Mensuales (der) ──
+        // Caja Estado General
+        doc.setFillColor(248,249,250);
+        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+        doc.roundedRect(14, 26, 88, 68, 2, 2, 'FD');
+        doc.setTextColor(44,62,80);
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.text("ESTADO GENERAL DE EQUIPOS", 58, 33, {align:'center'});
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+        doc.text("Entregados  -  Pendientes  -  Danados", 58, 38, {align:'center'});
+        const statusCanvas = document.getElementById('chartStatus');
+        try {
+            const sImg = statusCanvas.toDataURL("image/png",1.0);
+            doc.addImage(sImg, 'PNG', 16, 40, 84, 50);
+        } catch(e) {}
+
+        // Caja Préstamos Mensuales
+        doc.setFillColor(248,249,250);
+        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+        doc.roundedRect(108, 26, 88, 68, 2, 2, 'FD');
+        doc.setTextColor(44,62,80);
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.text("PRESTAMOS MENSUALES 2026", 152, 33, {align:'center'});
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+        doc.text("Uso total  -  Lab  -  Reemplazos  -  Danos", 152, 38, {align:'center'});
+        const anualCanvas = document.getElementById('chartAnual');
+        try {
+            const aImg = anualCanvas.toDataURL("image/png",1.0);
+            doc.addImage(aImg, 'PNG', 110, 40, 84, 50);
+        } catch(e) {}
+
+        // ── Fila 2: Préstamos por Docente (ancho completo) ──
+        doc.setFillColor(248,249,250);
+        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+        doc.roundedRect(14, 99, 182, 82, 2, 2, 'FD');
+        doc.setTextColor(44,62,80);
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.text("PRESTAMOS POR DOCENTE", 105, 106, {align:'center'});
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+        doc.text("Cantidad de prestamos registrados por cada profesor en el mes seleccionado", 105, 111, {align:'center'});
+        const docenteCanvas = document.getElementById('chartDocente');
+        try {
+            const dImg = docenteCanvas.toDataURL("image/png",1.0);
+            doc.addImage(dImg, 'PNG', 16, 113, 178, 64);
+        } catch(e) {}
+
+        // ── Fila 3: Tabla resumen por semana ──
+        const semanas = [1,2,3,4];
+        const semanaRows = semanas.map(s => {
+            const dInicio = (s-1)*7+1, dFin = s*7;
+            const reg = mesData.filter(d => {
+                const dia = new Date(d.fecha+"T00:00:00").getDate();
+                return dia >= dInicio && dia <= dFin;
+            });
+            const chrTotal = reg.reduce((sum,d)=>sum+parseInt(d.chromebooks||0),0);
+            const reeTotal = reg.reduce((sum,d)=>sum+parseInt(d.reemplazo||0),0);
+            const okReg = reg.filter(d=>(parseInt(d.chromebooks)+parseInt(d.reemplazo))===parseInt(d.devueltos)&&parseInt(d.devueltos)>0).length;
+            return [
+                `Semana ${s}  (dias ${dInicio}-${dFin})`,
+                reg.length,
+                chrTotal,
+                reeTotal,
+                okReg,
+                reg.length > 0 ? Math.round(okReg/reg.length*100)+'%' : '-'
+            ];
+        });
+
+        doc.setTextColor(44,62,80);
+        doc.setFontSize(8); doc.setFont("helvetica","bold");
+        doc.text("RESUMEN POR SEMANA", 14, 189);
+
+        doc.autoTable({
+            startY: 192,
+            head: [['Periodo','Prestamos','Chromebooks','Reemplazos','Devueltos OK','Tasa']],
+            body: semanaRows,
+            headStyles: { fillColor:[0,51,102], fontSize:7.5, fontStyle:'bold', textColor:255 },
+            bodyStyles: { fontSize:7.5 },
+            alternateRowStyles: { fillColor:[245,248,255] },
+            columnStyles: {
+                0: { cellWidth:58 },
+                1: { cellWidth:25, halign:'center' },
+                2: { cellWidth:30, halign:'center' },
+                3: { cellWidth:28, halign:'center' },
+                4: { cellWidth:28, halign:'center' },
+                5: { cellWidth:13, halign:'center', fontStyle:'bold' }
+            },
+            margin: { left:14, right:14 }
+        });
+
+        // ── Alertas del mes (solo si hay daños o pendientes) ──
+        const conDanio   = mesData.filter(d=>(d.observacion||"").toLowerCase().includes("dan"));
+        const pendientes = mesData.filter(d=>(parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0))>parseInt(d.devueltos||0)&&!(d.observacion||"").toLowerCase().includes("dan"));
+
+        if(conDanio.length > 0 || pendientes.length > 0) {
+            const alertY = doc.lastAutoTable.finalY + 8;
+            doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(180,0,0);
+            doc.text("ALERTAS DEL MES", 14, alertY);
+
+            const alertRows = [
+                ...conDanio.map(d    => ['DANO',     d.fecha.split('-').reverse().slice(0,2).join('/'), d.profesor, d.curso, d.observacion]),
+                ...pendientes.map(d  => ['PENDIENTE',d.fecha.split('-').reverse().slice(0,2).join('/'), d.profesor, d.curso, `Chr:${d.chromebooks} Ree:${d.reemplazo} Dev:${d.devueltos}`])
+            ];
+
+            doc.autoTable({
+                startY: alertY + 3,
+                head: [['Tipo','Fecha','Profesor','Curso','Detalle']],
+                body: alertRows,
+                headStyles: { fillColor:[180,0,0], fontSize:7, fontStyle:'bold', textColor:255 },
+                bodyStyles: { fontSize:7 },
+                columnStyles: {
+                    0: { cellWidth:22 },
+                    1: { cellWidth:18, halign:'center' },
+                    2: { cellWidth:55 },
+                    3: { cellWidth:22, halign:'center' },
+                    4: { cellWidth:'auto' }
+                },
+                margin: { left:14, right:14 }
+            });
+        }
+
+        // ══════════════════════════════════════
         // FOOTER en todas las páginas
         // ══════════════════════════════════════
         const pageCount = doc.internal.getNumberOfPages();
@@ -944,11 +1092,24 @@ function generatePDF() {
             doc.text(`Página ${i} de ${pageCount}`, 196, 293, { align:'right' });
         }
 
+        restorePages();
         doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
     };
 
-    img.onload  = buildPDF;
-    img.onerror = buildPDF;
+    img.onload  = () => {
+        // Mostrar página stats para que los canvas sean visibles
+        const pageStats = document.getElementById('pageStats');
+        const pageReg   = document.getElementById('pageRegistros');
+        const wasHidden = pageStats && pageStats.style.display === 'none';
+        if(wasHidden) {
+            pageStats.style.display = 'block';
+            pageReg.style.display   = 'none';
+            Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
+        }
+        // Esperar a que Chart.js redibuje antes de capturar
+        setTimeout(buildPDF, 400);
+    };
+    img.onerror = () => setTimeout(buildPDF, 400);
 }
 
 function exportToCSV() {
