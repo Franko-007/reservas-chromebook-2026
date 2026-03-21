@@ -1,1310 +1,385 @@
-function getEstado(r) {
-    const obs = (r.observacion || "").toLowerCase();
-    const chr = parseInt(r.chromebooks || 0);
-    const ree = parseInt(r.reemplazo || 0);
-    const dev = parseInt(r.devueltos || 0);
-
-    // Laboratorio: campo dedicado o legado en observacion
-    if (r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" || obs.includes("laboratorio")) return "LABORATORIO";
-    if (obs.includes("dañada") || obs.includes("dañado")) return "DAÑADO";
-    if ((chr + ree) > dev) return "ACTIVO";
-    return "CERRADO";
-}
-
-function calcEstado(chr,ree,dev,obs,lab){
- obs=(obs||"").toLowerCase();
- if(lab) return "LABORATORIO";
- if(obs.includes("dañada")||obs.includes("dañado")) return "DAÑADO";
- if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
- return "CERRADO";
-}
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHI_6GzuaT1BoJWhoMh-6YF_08AsLksgmGO9ImkDTmpKB9nT2SkRZaz0mKPIyGB8k/exec";
-// Inicializar con la fecha actual
-const _hoy = new Date();
-const _diaHoy = _hoy.getDate();
-const _semanaInicial = _diaHoy <= 7 ? 1 : _diaHoy <= 14 ? 2 : _diaHoy <= 21 ? 3 : 4;
-let db = [], viewDate = new Date(_hoy.getFullYear(), _hoy.getMonth(), 1), filterMode = 'all', currentWeek = _semanaInicial, charts = {};
-const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-const DOCENTES_NSG = ["ALEXIS CORTÉS","ALLYSON RIOS","ANA OGAZ","ANDREA SALAZAR","ANDREA DONOSO","AVIGUEY GONZALEZ","CAMILA GONZÁLEZ","CARLA MERA","CARLOS ARAYA","CARMEN ÁLVAREZ","CAROLINA MIRANDA","CAROLINA REYES","CECILIA GARCÍA","CLAUDIA TOLEDO","CONSTANZA LÓPEZ","DANIEL VITTA","DANIELA VERA","DANIELA VALENZUELA","DEBORA GAETE","DEBORA GONZÁLEZ","ELIZABETH MIRANDA","ERIKA KINDERMANN","FERNANDA RÍOS","FRANCISCA MAUREIRA","FRANCISCA COFRÉ","FRANCISCA VIZCAYA","GIOVANNA ARIAS","GOLDIE FARÍAS","HERNÁN REYES","JAVIERA ALIAGA","JOAQUÍN ALMUNA","KARIMME GUTIÉRREZ","KARINA BARRIOS","KAROLINA RIFFO","LEONARDO RÍOS","LORENA ARANCIBIA","LUIS SÁNCHEZ","MACARENA BELTRÁN","MARÍA MONZÓN","MARÍA GONZÁLEZ","MARISOL GUAJARDO","MATÍAS CUEVAS","NATALIA CARTES","NATALY HIDALGO","NICOLE BELLO","PAOLA ÁVILA","PATRICIA NÚÑEZ","PAULINA ARGOMEDO","PRISCILA VALENZUELA","REINA ORTEGA","STEPHANY GUZMÁN","VÍCTOR BARRIENTOS","YADIA CERDA","YESSENIA SÁNCHEZ"];
-
-// Función debounce para búsqueda suave
-let debounceTimer;
-function debouncedRender() {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(renderAll, 300);
-}
-
-// Docentes extra agregados en sesión (se conservan entre llamadas a fillDocentes)
-const _docentesExtra = [];
-
-function fillDocentes() {
-    const select = document.getElementById('fProfesor');
-    if(!select) return;
-    const valorActual = select.value;
-    select.innerHTML = '<option value="">Seleccione un docente...</option>';
-    [...DOCENTES_NSG, ..._docentesExtra].sort().forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d; opt.textContent = d; select.appendChild(opt);
-    });
-    // Restaurar valor si existía
-    if(valorActual) select.value = valorActual;
-}
-
-function agregarDocente() {
-    const nombre = prompt("Ingrese el nombre completo del docente:");
-    if (!nombre || !nombre.trim()) return;
-    const nombreFinal = nombre.trim().toUpperCase();
-    const sel = document.getElementById('fProfesor');
-    // Verificar si ya existe en la lista fija o en extras
-    const yaExiste = DOCENTES_NSG.includes(nombreFinal) || _docentesExtra.includes(nombreFinal);
-    if (!yaExiste) {
-        _docentesExtra.push(nombreFinal);
-        fillDocentes(); // re-renderizar con el nuevo incluido
-    }
-    sel.value = nombreFinal;
-    saveDraft();
-}
-
-// 1. Carga inicial de datos
-async function load() { 
-    const loadingEl = document.getElementById('loading');
-    if (loadingEl) loadingEl.style.display = 'flex';
-    fillDocentes();
-    
-    try {
-        const r = await fetch(SCRIPT_URL); 
-        if (!r.ok) throw new Error("Fallo en la respuesta del servidor");
-        
-        db = await r.json(); 
-        
-        const Toast = Swal.mixin({
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
-            timerProgressBar: true, didOpen: (toast) => { toast.addEventListener('mouseenter', Swal.stopTimer); toast.addEventListener('mouseleave', Swal.resumeTimer); }
-        });
-        Toast.fire({ icon: 'success', title: 'Datos sincronizados correctamente' });
-        
-        // Activar el tab de la semana actual
-        document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === _semanaInicial));
-        renderAll(); 
-        renderAnualChart(); 
-    } catch(e) { 
-        console.error("Error:", e);
-        Swal.fire('Error de Conexión', 'No se pudieron cargar los datos de Google Sheets.', 'error');
-    } finally {
-        if (loadingEl) loadingEl.style.display = 'none';
-    }
-}
-
-// 2. Renderizado de tabla y lógica de filtrado
-function renderAll() {
-    const displayDateEl = document.getElementById('displayDate');
-    if (displayDateEl) displayDateEl.innerText = `${mNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
-    
-    const s = (document.getElementById('searchBox')?.value || "").toLowerCase();
-    const c = document.getElementById('courseSelect')?.value || "";
-
-    // Base de datos del mes actual (usada para KPIs y Gráficos)
-    const baseFiltered = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        const matchM = date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-        return matchM;
-    });
-
-    // Filtros de búsqueda y categorías para la TABLA
-    const finalFiltered = baseFiltered.filter(d => {
-        const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
-        const matchC = c === "" || d.curso === c;
-        
-        let matchW = true;
-        if(currentWeek > 0) {
-            const date = new Date(d.fecha + "T00:00:00");
-            const day = date.getDate();
-            matchW = (day >= (currentWeek - 1) * 7 + 1 && day <= currentWeek * 7);
-        }
-
-        const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
-        const isDebt = totalOut > parseInt(d.devueltos || 0);
-        const isDamaged = d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado");
-        const isLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
-                   || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
-
-        let matchMode = true;
-        if(filterMode === 'lab') matchMode = isLab;
-        else if(filterMode === 'reemp') matchMode = parseInt(d.reemplazo || 0) > 0;
-        else if(filterMode === 'ok') matchMode = !isDebt && parseInt(d.devueltos) > 0;
-        else if(filterMode === 'debt') matchMode = isDebt && !isDamaged; 
-        else if(filterMode === 'damaged') matchMode = isDamaged;
-
-        return matchS && matchC && matchW && matchMode;
-    });
-
-    const tableBody = document.getElementById('tableBody');
-    const emptyState = document.getElementById('emptyState');
-    const tableEl = document.getElementById('mainTable');
-
-    if (finalFiltered.length === 0) {
-        if(tableEl) tableEl.style.display = 'none';
-        if(emptyState) emptyState.style.display = 'block';
-    } else {
-        if(tableEl) tableEl.style.display = 'table';
-        if(emptyState) emptyState.style.display = 'none';
-        
-        // Ordenar por fecha descendente (más reciente primero)
-        const sorted = [...finalFiltered].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-        // Guardar referencia global para PDF filtrado
-        window._lastSortedData = sorted;
-
-        // Contador de registros
-        const contadorEl = document.getElementById('recordCount');
-        if(contadorEl) contadorEl.textContent = `${sorted.length} registro${sorted.length !== 1 ? 's' : ''}`;
-
-        // Agrupar por día con separadores
-        const diasSemana = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-        let lastDay = null;
-        const rows = [];
-        sorted.forEach(r => {
-            const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
-            const isOK = totalOut === parseInt(r.devueltos);
-            const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
-            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
-                       || (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
-
-            // ── Separador de día ──
-            if (r.fecha !== lastDay) {
-                lastDay = r.fecha;
-                const fechaObj = new Date(r.fecha + "T00:00:00");
-                const diaNombre = diasSemana[fechaObj.getDay()];
-                const fechaFmt = r.fecha.split('-').reverse().slice(0,2).join('/');
-                const registrosDia = sorted.filter(x => x.fecha === r.fecha);
-                const labsDia = registrosDia.filter(x => x.uso_laboratorio === true || x.uso_laboratorio === "TRUE" || x.uso_laboratorio === "true").length;
-                const labBadge = labsDia > 0
-                    ? `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>`
-                    : '';
-                rows.push(`<tr class="day-separator-row">
-                    <td colspan="10" style="background:linear-gradient(90deg,#e0f4f1,#f0faf8,#e8f6f3);border-left:5px solid #00897b;border-top:1px solid #b2dfdb;border-bottom:1px solid #b2dfdb;padding:8px 16px;font-size:0.78rem;font-weight:800;color:#00695c;letter-spacing:0.8px;text-transform:uppercase;">
-                        <span style="display:inline-flex;align-items:center;gap:8px;">
-                            <span style="background:#00897b;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;">📅 ${diaNombre}</span>
-                            <span style="color:#00897b;font-weight:900;">${fechaFmt}</span>
-                            <span style="background:#e0f2f1;color:#00695c;border:1px solid #80cbc4;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
-                            ${labBadge}
-                        </span>
-                    </td>
-                </tr>`);
-            }
-
-            let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
-            const isPendienteObs = (r.observacion || "").toLowerCase() === "pendiente";
-            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : isPendienteObs ? 'PENDIENTE' : 'ACTIVO';
-            let estadoColor = isOK ? '#198754' : isPendienteObs ? '#f9a825' : '#ffc107';
-            let estadoTextColor = isOK ? 'white' : isPendienteObs ? '#fff' : '#444';
-            if(isDamaged) { estadoTexto = r.observacion; estadoColor = 'var(--danger-red)'; estadoTextColor = 'white'; }
-
-            const badgeLab = isLab
-                ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#6f42c1,#9b59b6);color:white;box-shadow:0 2px 6px rgba(111,66,193,0.4);">🟣 LABORATORIO</span>`
-                : '';
-            const badgeEstado = `<span class="badge badge-status" style="background:${estadoColor};color:${estadoTextColor}">${estadoTexto}</span>`;
-
-            rows.push(`<tr class="${rowClass}">
-                <td><span class="text-muted" style="font-size:0.78rem;">${r.fecha.split('-').reverse().slice(0,2).join('/')}</span></td>
-                <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
-                <td>${r.curso}</td>
-                <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
-                <td class="text-start fw-bold" style="color:#2b5797;cursor:pointer;text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
-                <td>${r.chromebooks}</td>
-                <td class="text-danger fw-bold">${r.reemplazo}</td>
-                <td class="text-success fw-bold">${r.devueltos}</td>
-                <td>
-                    ${badgeLab}
-                    ${(parseInt(r.reemplazo||0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#b71c1c,#e53935);color:white;box-shadow:0 2px 5px rgba(183,28,28,0.35);">📦 ${r.nro_equipo_reemplazo}</span>` : ''}
-                    ${badgeEstado}
-                </td>
-                <td><div class="d-flex justify-content-center gap-1">
-                    <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
-                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
-                </div></td>
-            </tr>`);
-        });
-        tableBody.innerHTML = rows.join('');
-    }
-
-    // Banner de deudas
-    const currentDebts = baseFiltered.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !d.observacion.toLowerCase().includes("dañada"));
-    const banner = document.getElementById('debtBanner');
-    if(banner) {
-        if(currentDebts.length > 0) {
-            banner.style.display = 'block';
-            document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos pendientes en ${mNames[viewDate.getMonth()]}.`;
-        } else banner.style.display = 'none';
-    }
-
-    updateKPIs(baseFiltered);
-    updateCharts(baseFiltered); 
-}
-
-// 3. KPIs - siempre sobre el mes completo, KPI semana sigue el tab activo
-function updateKPIs(base) {
-    function animateKPI(id, val) {
-        const el = document.getElementById(id);
-        if(!el) return;
-        el.style.transition = 'opacity 0.2s';
-        el.style.opacity = '0';
-        setTimeout(() => { el.innerText = val; el.style.opacity = '1'; }, 200);
-    }
-
-    // Mes completo independiente del tab de semana activo
-    const mesCompleto = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-    const labMes   = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
-    const reempMes = mesCompleto.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-    const okMes    = mesCompleto.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const dmgMes   = mesCompleto.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
-
-    animateKPI('kpi-total',   mesCompleto.length);
-    animateKPI('kpi-lab',     labMes);
-    animateKPI('kpi-reemp',   reempMes);
-    animateKPI('kpi-damaged', dmgMes);
-    animateKPI('kpi-ok', mesCompleto.length > 0 ? Math.round((okMes / mesCompleto.length) * 100) + "%" : "0%");
-
-    // KPI semana: sigue exactamente el tab activo
-    let prestSemana, labelSemTxt;
-    if (currentWeek === 0) {
-        // "Mes Completo" → semana laboral real (lunes–viernes de hoy)
-        const hoyKpi = new Date(); hoyKpi.setHours(0,0,0,0);
-        const lunesKpi = new Date(hoyKpi);
-        lunesKpi.setDate(hoyKpi.getDate() - ((hoyKpi.getDay() + 6) % 7));
-        const viernesKpi = new Date(lunesKpi);
-        viernesKpi.setDate(lunesKpi.getDate() + 6); // incluye fin de semana
-        prestSemana = mesCompleto.filter(d => {
-            const f = new Date(d.fecha + "T00:00:00");
-            return f >= lunesKpi && f <= viernesKpi;
-        }).length;
-        labelSemTxt = `${lunesKpi.getDate()}/${lunesKpi.getMonth()+1} – ${viernesKpi.getDate()}/${viernesKpi.getMonth()+1}`;
-    } else {
-        // Semana 1–4: días exactos del tab (mismo rango que usa la tabla)
-        const diaInicio = (currentWeek - 1) * 7 + 1;
-        const diaFin    = currentWeek * 7;
-        prestSemana = mesCompleto.filter(d => {
-            const dia = new Date(d.fecha + "T00:00:00").getDate();
-            return dia >= diaInicio && dia <= diaFin;
-        }).length;
-        const diasEnMes = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate();
-        labelSemTxt = `días ${diaInicio}–${Math.min(diaFin, diasEnMes)}`;
-    }
-    animateKPI('kpi-semana', prestSemana);
-    const labelSemana = document.getElementById('kpiSemanaLabel');
-    const glowSemana  = document.getElementById('kpiSemanaGlow');
-    if (labelSemana) labelSemana.textContent = labelSemTxt;
-    if (glowSemana)  glowSemana.style.display = prestSemana > 0 ? 'block' : 'none';
-
-    // ── Barra de stock en tiempo real ──────────────────────────────────
-    // Separar chromebooks regulares de equipos de reemplazo
-    const enUsoChr = base.filter(d => {
-        const chr = parseInt(d.chromebooks||0);
-        const dev = parseInt(d.devueltos||0);
-        const ree = parseInt(d.reemplazo||0);
-        const isDmg = (d.observacion||"").toLowerCase().includes("dañ");
-        return (chr + ree) > dev && !isDmg;
-    }).reduce((sum, d) => {
-        // Solo contar chromebooks regulares en la barra principal
-        const chr = parseInt(d.chromebooks||0);
-        const dev = parseInt(d.devueltos||0);
-        const ree = parseInt(d.reemplazo||0);
-        const pendiente = Math.max(0, chr + ree - dev);
-        return sum + Math.min(chr, pendiente); // solo los chr, no los de reemplazo
-    }, 0);
-
-    const enUsoRee = base.filter(d => {
-        const ree = parseInt(d.reemplazo||0);
-        const dev = parseInt(d.devueltos||0);
-        const chr = parseInt(d.chromebooks||0);
-        const isDmg = (d.observacion||"").toLowerCase().includes("dañ");
-        return ree > 0 && (chr + ree) > dev && !isDmg;
-    }).reduce((sum, d) => sum + parseInt(d.reemplazo||0), 0);
-
-    const enUso = enUsoChr; // la barra solo refleja chromebooks regulares
-    const disponible = Math.max(0, STOCK_MAXIMO - enUso);
-    const pct = Math.min(100, Math.round((enUso / STOCK_MAXIMO) * 100));
-
-    // Color progresivo: verde → naranja → rojo
-    let barColor = 'linear-gradient(90deg, #198754, #28a745)';
-    if(pct >= 50 && pct < 80) barColor = 'linear-gradient(90deg, #f39c12, #ffc107)';
-    if(pct >= 80) barColor = 'linear-gradient(90deg, #dc3545, #ff6b6b)';
-
-    const barEl = document.getElementById('stock-bar-uso');
-    const labelEl = document.getElementById('stock-bar-label');
-    const warningEl = document.getElementById('stock-warning');
-    const enUsoEl = document.getElementById('stock-en-uso');
-    const disponibleEl = document.getElementById('stock-disponible');
-    const totalEl = document.getElementById('stock-total');
-    const totalLabelEl = document.getElementById('stock-total-label');
-
-    if(barEl) { barEl.style.width = pct + '%'; barEl.style.background = barColor; }
-    if(labelEl) labelEl.textContent = enUso > 0 ? `${pct}% en uso` : '';
-    if(warningEl) warningEl.style.display = pct >= 85 ? 'block' : 'none';
-    if(enUsoEl) enUsoEl.textContent = enUso + (enUsoRee > 0 ? ` (+${enUsoRee} reemplazo)` : '');
-    if(disponibleEl) disponibleEl.textContent = disponible;
-    if(totalEl) totalEl.textContent = `${STOCK_MAXIMO} + ${STOCK_REEMPLAZO}`;
-    if(totalLabelEl) totalLabelEl.textContent = `${STOCK_MAXIMO} Chromebooks · ${STOCK_REEMPLAZO} Reemplazos`;
-}
-
-// 4. Charts - CORRECCIÓN DE ESCALA Y VISIBILIDAD DE NOMBRES
-function updateCharts(base) {
-    const dS = {}; 
-    base.forEach(d => { 
-        let prof = d.profesor ? d.profesor.trim() : "";
-        if(prof && prof !== "------") {
-            dS[prof] = (dS[prof] || 0) + 1; 
-        }
-    });
-
-    const sortedLabels = Object.keys(dS).sort();
-    const sortedValues = sortedLabels.map(label => dS[label]);
-
-    const ctxDocente = document.getElementById('chartDocente');
-    if(ctxDocente) {
-        if(charts.D) charts.D.destroy();
-        charts.D = new Chart(ctxDocente, { 
-            type: 'bar', 
-            data: { 
-                labels: sortedLabels, 
-                datasets: [{
-                    data: sortedValues, 
-                    backgroundColor: '#0d6832', 
-                    borderRadius: 5
-                }]
-            }, 
-            options: {
-                indexAxis: 'y', 
-                maintainAspectRatio: false, 
-                responsive: true,
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: { enabled: true }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1, // SIN DECIMALES
-                            precision: 0
-                        },
-                        title: { display: true, text: 'Cantidad de Préstamos' }
-                    },
-                    y: {
-                        ticks: {
-                            autoSkip: false, // MUESTRA TODOS LOS NOMBRES
-                            font: { size: 11 }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    const cerrados = base.filter(d => getEstado(d) === "CERRADO").length;
-const activos = base.filter(d => getEstado(d) === "ACTIVO").length;
-const danados = base.filter(d => getEstado(d) === "DAÑADO").length;
-
-const ctxStatus = document.getElementById('chartStatus');
-if(ctxStatus) {
-    if(charts.S) charts.S.destroy();
-    charts.S = new Chart(ctxStatus, {
-        type: 'bar',
-        data: {
-            labels: ['Entregados', 'Pendientes', 'Dañados'],
-            datasets: [{
-                data: [cerrados, activos, danados],
-                backgroundColor: ['#198754', '#ffc107', '#dc3545'],
-                borderRadius: 6
-            }]
-        },
-        options: {
-            maintainAspectRatio: false,
-            responsive: true,
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: true }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1 }
-                }
-            }
-        }
-    });
-}
-
-}
-
-// 5. Chart Anual
-function renderAnualChart() {
-    const usageTotal = new Array(12).fill(0), replacements = new Array(12).fill(0), damaged = new Array(12).fill(0), labs = new Array(12).fill(0);
-    
-    db.forEach(d => {
-        const dt = new Date(d.fecha + "T00:00:00");
-        if(dt.getFullYear() === 2026) {
-            const m = dt.getMonth();
-            usageTotal[m]++;
-            if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
-            if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
-            const esLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
-                          || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
-            if(esLab) labs[m]++;
-        }
-    });
-
-    const ctxAnual = document.getElementById('chartAnual');
-    if(ctxAnual) {
-        if(charts.A) charts.A.destroy();
-        charts.A = new Chart(ctxAnual, {
-            type: 'line',
-            data: {
-                labels: mNames.map(m => m.slice(0,3)),
-                datasets: [
-                    { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
-                    { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 },
-                    { label: 'Uso Reemplazos', data: replacements, borderColor: '#f39c12', backgroundColor: '#f39c12', tension: 0.3, fill: false, borderDash: [5, 5] },
-                    { label: 'Equipos Dañados', data: damaged, borderColor: '#dc3545', backgroundColor: '#dc3545', tension: 0.3, fill: false, borderWidth: 2 }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
-        });
-    }
-}
-
-function moveMonth(n) { viewDate.setMonth(viewDate.getMonth() + n); renderAll(); }
-function setFilterWeek(w) { currentWeek = w; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === w)); renderAll(); }
-function setFilterMode(m) { filterMode = m; renderAll(); }
-function resetApp() { filterMode = 'all'; currentWeek = 0; document.getElementById('searchBox').value = ''; document.getElementById('courseSelect').value = ''; document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0)); renderAll(); }
-
-function irASemanActual() {
-    const hoy = new Date();
-    viewDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    filterMode = 'all';
-    document.getElementById('searchBox').value = '';
-    document.getElementById('courseSelect').value = '';
-    const dia = hoy.getDate();
-    const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
-    currentWeek = semana;
-    document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === semana));
-    renderAll();
-    setTimeout(() => {
-        const tabla = document.getElementById('mainTable');
-        if (tabla) tabla.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
-}
-
-function showPage(page) {
-    const pageReg  = document.getElementById('pageRegistros');
-    const pageStat = document.getElementById('pageStats');
-    const btnReg   = document.getElementById('btnPageRegistros');
-    const btnStat  = document.getElementById('btnPageStats');
-
-    if (page === 'stats') {
-        pageReg.style.display  = 'none';
-        pageStat.style.display = 'block';
-        btnReg.style.background  = 'white';
-        btnReg.style.color       = '#555';
-        btnReg.style.border      = '1.5px solid #ddd';
-        btnStat.style.background = '#0d6832';
-        btnStat.style.color      = 'white';
-        btnStat.style.border     = '1.5px solid #0d6832';
-        // Forzar resize de Chart.js para que dibuje correctamente en el nuevo contenedor visible
-        setTimeout(() => { Object.values(charts).forEach(c => { if(c) c.resize(); }); }, 50);
-    } else {
-        pageStat.style.display = 'none';
-        pageReg.style.display  = 'block';
-        btnStat.style.background = 'white';
-        btnStat.style.color      = '#555';
-        btnStat.style.border     = '1.5px solid #ddd';
-        btnReg.style.background  = '#0d6832';
-        btnReg.style.color       = 'white';
-        btnReg.style.border      = '1.5px solid #0d6832';
-    }
-}
-
-function toggleNroEquipo() {
-    const ree = parseInt(document.getElementById('fRee').value || 0);
-    const wrapper = document.getElementById('nroEquipoWrapper');
-    if(wrapper) wrapper.style.display = ree > 0 ? 'block' : 'none';
-}
-
-function onEstadoDevChange() {
-    const val = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
-    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
-    if(tipoDanioWrapper) tipoDanioWrapper.style.display = val === 'danio' ? 'block' : 'none';
-    saveDraft();
-}
-
-function openModal() { 
-    document.getElementById('resForm').reset(); 
-    document.getElementById('fId').value = ''; 
-    document.getElementById('resForm').classList.remove('was-validated');
-    // Auto-rellenar con la fecha de hoy si no hay draft
-    const hoyStr = new Date().toISOString().split('T')[0];
-    document.getElementById('fFecha').value = hoyStr;
-    document.getElementById('fLab').checked = false;
-    // Reset nuevos campos
-    document.querySelectorAll('input[name="fEstadoDev"]').forEach(r => r.checked = false);
-    document.querySelectorAll('input[name="fNroEquipo"]').forEach(r => r.checked = false);
-    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
-    if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
-    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
-    if(nroEquipoWrapper) nroEquipoWrapper.style.display = 'none';
-    if(document.getElementById('fTipoDanio')) document.getElementById('fTipoDanio').value = '';
-    loadDraft(); 
-    fillDocentes();
-    new bootstrap.Modal(document.getElementById('resModal')).show(); 
-}
-
-async function saveData() {
-    const form = document.getElementById('resForm');
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
-        Swal.fire('Atención', 'Por favor complete todos los campos requeridos', 'warning');
-        return;
-    }
-
-    document.getElementById('loading').style.display = 'flex';
-    const esLab = document.getElementById('fLab').checked;
-
-    // Resolver observacion desde el nuevo estado de devolución
-    const estadoDevSeleccionado = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
-    let obsValue = '';
-    if (estadoDevSeleccionado === 'ok') {
-        obsValue = 'Sin novedad';
-    } else if (estadoDevSeleccionado === 'pendiente') {
-        obsValue = 'Pendiente';
-    } else if (estadoDevSeleccionado === 'danio') {
-        const tipoDanio = (document.getElementById('fTipoDanio')?.value || '').trim();
-        obsValue = tipoDanio || 'Dañado';
-    } else {
-        // Si no se seleccionó nada, usar el valor del fObs legacy (edición)
-        obsValue = document.getElementById('fObs')?.value || 'Pendiente';
-    }
-
-    const estado = calcEstado(
-        document.getElementById('fChr').value,
-        document.getElementById('fRee').value,
-        document.getElementById('fDev').value,
-        obsValue,
-        esLab
-    );
-    const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0,10) : '';
-    const resp = 'Franco San Martín';
-    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
-    const payload = {
-        action: document.getElementById('fId').value ? 'update' : 'create',
-        id: document.getElementById('fId').value,
-        fecha: document.getElementById('fFecha').value,
-        hora: document.getElementById('fHora').value,
-        curso: document.getElementById('fCurso').value,
-        profesor: document.getElementById('fProfesor').value,
-        asignatura: document.getElementById('fAsignatura').value,
-        chromebooks: document.getElementById('fChr').value,
-        reemplazo: document.getElementById('fRee').value,
-        devueltos: document.getElementById('fDev').value,
-        observacion: obsValue,
-        nro_equipo_reemplazo: nroEquipo,
-        uso_laboratorio: esLab,
-        estado_operativo: estado,
-        fecha_cierre: fechaCierre,
-        responsable_cierre: resp
-    };
-    try {
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-        localStorage.removeItem('franco_draft');
-        bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
-        const accion = payload.action === 'create' ? 'creado' : 'actualizado';
-        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true });
-        Toast.fire({ icon: 'success', title: `Registro ${accion} correctamente` });
-        load();
-    } catch(e) { 
-        Swal.fire('Error', 'No se pudo guardar el registro', 'error'); 
-        document.getElementById('loading').style.display = 'none';
-    }
-}
-
-const STOCK_MAXIMO = 115;      // Chromebooks regulares
-const STOCK_REEMPLAZO = 4;     // Equipos de reemplazo (no cuentan en el stock principal)
-
-function validateCounts(autoFill) {
-    const chr = parseInt(document.getElementById('fChr').value || 0);
-    const ree = parseInt(document.getElementById('fRee').value || 0);
-    const dev = parseInt(document.getElementById('fDev').value || 0);
-    const msg = document.getElementById('valMsg');
-    const msgStock = document.getElementById('valMsgStock');
-    const devInput = document.getElementById('fDev');
-
-    // Auto-completar devueltos si está en 0 y se llama desde chr/ree
-    if(autoFill && dev === 0 && (chr + ree) > 0) {
-        devInput.value = chr + ree;
-    }
-
-    const devFinal = parseInt(devInput.value || 0);
-    if(devFinal !== (chr + ree)) {
-        msg.style.display = 'block';
-        devInput.classList.add('val-warning');
-    } else {
-        msg.style.display = 'none';
-        devInput.classList.remove('val-warning');
-    }
-
-    // Alerta stock máximo
-    const total = chr + ree;
-    if(msgStock) {
-        if(total > STOCK_MAXIMO) {
-            msgStock.style.display = 'block';
-            msgStock.textContent = `⚠️ Supera el stock disponible (máx. ${STOCK_MAXIMO} equipos)`;
-        } else {
-            msgStock.style.display = 'none';
-        }
-    }
-
-    saveDraft();
-}
-
-function editItem(id) {
-    const r = db.find(x => x.id.toString() === id.toString());
-    document.getElementById('fId').value = r.id;
-    document.getElementById('fFecha').value = r.fecha;
-    document.getElementById('fHora').value = r.hora;
-    document.getElementById('fCurso').value = r.curso;
-    fillDocentes();
-    document.getElementById('fProfesor').value = r.profesor;
-    document.getElementById('fAsignatura').value = r.asignatura;
-    document.getElementById('fChr').value = r.chromebooks;
-    document.getElementById('fRee').value = r.reemplazo;
-    document.getElementById('fDev').value = r.devueltos;
-    document.getElementById('fObs').value = r.observacion;
-
-    // Cargar estado de laboratorio
-    const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
-                 || (r.observacion || "").toLowerCase().includes("laboratorio");
-    document.getElementById('fLab').checked = labVal;
-
-    // Cargar N° equipo de reemplazo
-    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
-    const ree = parseInt(r.reemplazo || 0);
-    if(nroEquipoWrapper) nroEquipoWrapper.style.display = ree > 0 ? 'block' : 'none';
-    document.querySelectorAll('input[name="fNroEquipo"]').forEach(rb => rb.checked = false);
-    if(r.nro_equipo_reemplazo) {
-        const rbEq = document.querySelector(`input[name="fNroEquipo"][value="${r.nro_equipo_reemplazo}"]`);
-        if(rbEq) rbEq.checked = true;
-    }
-
-    // Cargar estado de devolución
-    const obs = (r.observacion || "").toLowerCase();
-    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
-    document.querySelectorAll('input[name="fEstadoDev"]').forEach(rb => rb.checked = false);
-    if(obs === 'sin novedad' || obs === '') {
-        const edOk = document.getElementById('edOk');
-        if(edOk) edOk.checked = true;
-        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
-    } else if(obs === 'pendiente') {
-        const edPend = document.getElementById('edPendiente');
-        if(edPend) edPend.checked = true;
-        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
-    } else if(obs.includes('dañ') || obs.includes('falla') || obs.includes('no enciende')) {
-        const edDanio = document.getElementById('edDanio');
-        if(edDanio) edDanio.checked = true;
-        if(tipoDanioWrapper) tipoDanioWrapper.style.display = 'block';
-        const fTipoDanio = document.getElementById('fTipoDanio');
-        if(fTipoDanio) fTipoDanio.value = r.observacion;
-    }
-
-    validateCounts();
-    new bootstrap.Modal(document.getElementById('resModal')).show();
-}
-
-function saveDraft() {
-    if(document.getElementById('fId').value !== "") return;
-    const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
-    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
-    const draft = { 
-        fecha: document.getElementById('fFecha').value, 
-        hora: document.getElementById('fHora').value, 
-        curso: document.getElementById('fCurso').value, 
-        profesor: document.getElementById('fProfesor').value, 
-        asignatura: document.getElementById('fAsignatura').value, 
-        obs: document.getElementById('fObs').value, 
-        lab: document.getElementById('fLab').checked,
-        nroEquipo: nroEquipo,
-        estadoDev: estadoDev,
-        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
-    };
-    localStorage.setItem('franco_draft', JSON.stringify(draft));
-}
-
-function loadDraft() {
-    const saved = localStorage.getItem('franco_draft');
-    if(saved) {
-        const d = JSON.parse(saved);
-        document.getElementById('fFecha').value = d.fecha; 
-        document.getElementById('fHora').value = d.hora; 
-        document.getElementById('fCurso').value = d.curso; 
-        document.getElementById('fProfesor').value = d.profesor; 
-        document.getElementById('fAsignatura').value = d.asignatura; 
-        document.getElementById('fObs').value = d.obs; 
-        if(d.lab !== undefined) document.getElementById('fLab').checked = d.lab;
-        if(d.nroEquipo) {
-            const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
-            if(rb) rb.checked = true;
-            toggleNroEquipo();
-        }
-        if(d.estadoDev) {
-            const rb = document.querySelector(`input[name="fEstadoDev"][value="${d.estadoDev}"]`);
-            if(rb) { rb.checked = true; onEstadoDevChange(); }
-        }
-        if(d.tipoDanio && document.getElementById('fTipoDanio')) {
-            document.getElementById('fTipoDanio').value = d.tipoDanio;
-        }
-    }
-}
-
-async function deleteItem(id) {
-    const result = await Swal.fire({
-        title: '¿Estás seguro?',
-        text: "Esta acción no se puede deshacer.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
-    });
-
-    if (result.isConfirmed) {
-        document.getElementById('loading').style.display = 'flex';
-        try {
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
-            load();
-            Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-        } catch(e) { 
-            Swal.fire('Error', 'No se pudo eliminar.', 'error');
-            document.getElementById('loading').style.display = 'none'; 
-        }
-    }
-}
-
-function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const mesActual = mNames[viewDate.getMonth()];
-    const anioActual = viewDate.getFullYear();
-    const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
-    const fechaEmision = new Date().toLocaleDateString('es-CL');
-    
-    const mesData = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = logoUrl;
-
-    const buildPDF = () => {
-        const pageStats = document.getElementById('pageStats');
-        const pageReg   = document.getElementById('pageRegistros');
-
-        const restorePages = () => {
-            if(pageStats) pageStats.style.display = 'none';
-            if(pageReg)   pageReg.style.display   = 'block';
-            // Volver al estado correcto del botón
-            const btnStat = document.getElementById('btnPageStats');
-            const btnReg  = document.getElementById('btnPageRegistros');
-            if(btnStat) { btnStat.style.background='white'; btnStat.style.color='#555'; btnStat.style.border='1.5px solid #ddd'; }
-            if(btnReg)  { btnReg.style.background='#0d6832'; btnReg.style.color='white'; btnReg.style.border='1.5px solid #0d6832'; }
-        };
-
-        // ══════════════════════════════════════
-        // PÁGINA 1 – RESUMEN EJECUTIVO
-        // ══════════════════════════════════════
-
-        // Header azul institucional
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 210, 42, 'F');
-        try { doc.addImage(img, 'PNG', 170, 4, 22, 28); } catch(e) {}
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20); doc.setFont("helvetica", "bold");
-        doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 20);
-        doc.setFontSize(10); doc.setFont("helvetica", "normal");
-        doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 30);
-        doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 37);
-
-        // ── KPIs en tarjetas ──
-        const total   = mesData.length;
-        const ok      = mesData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-        const dmg     = mesData.filter(d => (d.observacion||"").toLowerCase().includes("dañ")).length;
-        const activos = mesData.filter(d => (parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0)) > parseInt(d.devueltos||0) && !(d.observacion||"").toLowerCase().includes("dañ")).length;
-        const labs    = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-        const reemp   = mesData.filter(d => parseInt(d.reemplazo||0) > 0).length;
-        const tasa    = total > 0 ? Math.round((ok/total)*100) : 0;
-
-        const kpis = [
-            { label: 'Total Préstamos', value: total,    color: [13,104,50] },
-            { label: 'Devoluciones OK', value: ok,       color: [25,135,84] },
-            { label: 'Pendientes',      value: activos,  color: [255,193,7] },
-            { label: 'Con Daños',       value: dmg,      color: [211,47,47] },
-            { label: 'Uso Laboratorio', value: labs,     color: [111,66,193] },
-            { label: 'Con Reemplazos',  value: reemp,    color: [220,53,69] },
-        ];
-
-        // KPIs — 6 tarjetas que caben exactamente en 182mm (14 a 196)
-        const kpiW = 27, kpiH = 20, kpiY0 = 50;
-        const totalW = kpiW * 6 + 5 * 4; // 6 tarjetas + 5 gaps de 4mm = 182mm exacto
-        const kpiX0 = 14;
-        kpis.forEach((k, i) => {
-            const x = kpiX0 + i * (kpiW + 4);
-            doc.setFillColor(...k.color);
-            doc.roundedRect(x, kpiY0, kpiW, kpiH, 2, 2, 'F');
-            doc.setTextColor(255,255,255);
-            doc.setFontSize(13); doc.setFont("helvetica","bold");
-            doc.text(String(k.value), x + kpiW/2, kpiY0 + 9, { align:'center' });
-            doc.setFontSize(5.5); doc.setFont("helvetica","normal");
-            doc.text(k.label.toUpperCase(), x + kpiW/2, kpiY0 + 16, { align:'center' });
-        });
-
-        // Tasa de retorno destacada
-        doc.setFillColor(0, 51, 102);
-        doc.roundedRect(14, 77, 182, 10, 2, 2, 'F');
-        doc.setTextColor(255,255,255);
-        doc.setFontSize(9); doc.setFont("helvetica","bold");
-        doc.text(`TASA DE RETORNO DEL MES: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 84, { align:'center' });
-
-        // ── Gráfico de estado — a la derecha, mismo nivel que título de tabla ──
-        const chartCanvas = document.getElementById('chartStatus');
-        try {
-            const chartImg = chartCanvas.toDataURL("image/png", 1.0);
-            doc.setTextColor(44,62,80);
-            doc.setFontSize(8); doc.setFont("helvetica","bold");
-            doc.text("DISTRIBUCIÓN DE ESTADO", 157, 93, { align:'center' });
-            doc.addImage(chartImg, 'PNG', 130, 95, 66, 48);
-        } catch(e) {}
-
-        // ── Tabla de todos los docentes — ancho completo ──
-        const docentesMap = {};
-        mesData.forEach(d => {
-            const k = d.profesor ? d.profesor.trim() : "—";
-            if(!docentesMap[k]) docentesMap[k] = { total:0, ok:0, reemp:0, lab:0, dmg:0 };
-            docentesMap[k].total++;
-            if((parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
-            if(parseInt(d.reemplazo||0) > 0) docentesMap[k].reemp++;
-            if(d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
-            if((d.observacion||"").toLowerCase().includes("dañ")) docentesMap[k].dmg++;
-        });
-
-        const todosDocentes = Object.entries(docentesMap)
-            .sort((a, b) => b[1].total - a[1].total);
-
-        doc.setTextColor(44,62,80);
-        doc.setFontSize(11); doc.setFont("helvetica","bold");
-        doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 93);
-
-        doc.autoTable({
-            startY: 97,
-            head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
-            body: todosDocentes.map(([nombre, v], i) => [
-                i + 1,
-                nombre,
-                v.total,
-                v.ok,
-                v.reemp > 0 ? `Sí (${v.reemp})` : '—',
-                v.lab   > 0 ? `Sí (${v.lab})`   : '—',
-                v.dmg   > 0 ? v.dmg              : '—'
-            ]),
-            headStyles: { fillColor: [0,51,102], fontSize: 8, fontStyle:'bold', textColor:255 },
-            bodyStyles: { fontSize: 8 },
-            alternateRowStyles: { fillColor: [245,248,255] },
-            tableWidth: 'auto',
-            columnStyles: {
-                0: { cellWidth: 10,  halign:'center' },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 24, halign:'center' },
-                3: { cellWidth: 22, halign:'center' },
-                4: { cellWidth: 26, halign:'center' },
-                5: { cellWidth: 22, halign:'center' },
-                6: { cellWidth: 18, halign:'center' }
-            },
-            margin: { left: 14, right: 14 },
-            didParseCell: (data) => {
-                if(data.section === 'body' && data.column.index === 6) {
-                    if(data.cell.raw !== '—') data.cell.styles.textColor = [211,47,47];
-                }
-                if(data.section === 'body' && data.column.index === 2) {
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = [0,51,102];
-                }
-            }
-        });
-
-        // ══════════════════════════════════════
-        // PÁGINA 2 – DASHBOARD VISUAL
-        // ══════════════════════════════════════
-        doc.addPage();
-
-        // Header página 2
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 210, 22, 'F');
-        try { doc.addImage(img, 'PNG', 184, 1, 14, 18); } catch(e) {}
-        doc.setTextColor(255,255,255);
-        doc.setFontSize(13); doc.setFont("helvetica","bold");
-        doc.text("DASHBOARD - ANALISIS VISUAL", 14, 10);
-        doc.setFontSize(8); doc.setFont("helvetica","normal");
-        doc.text(`${mesActual.toUpperCase()} ${anioActual}  |  ${total} prestamos registrados  |  Tasa de retorno: ${tasa}%`, 14, 17);
-
-        // ── Fila 1: Estado General (izq) + Préstamos Mensuales (der) ──
-        // Caja Estado General
-        doc.setFillColor(248,249,250);
-        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
-        doc.roundedRect(14, 26, 88, 68, 2, 2, 'FD');
-        doc.setTextColor(44,62,80);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.text("ESTADO GENERAL DE EQUIPOS", 58, 33, {align:'center'});
-        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
-        doc.text("Entregados  -  Pendientes  -  Danados", 58, 38, {align:'center'});
-        const statusCanvas = document.getElementById('chartStatus');
-        try {
-            const sImg = statusCanvas.toDataURL("image/png",1.0);
-            doc.addImage(sImg, 'PNG', 16, 40, 84, 50);
-        } catch(e) {}
-
-        // Caja Préstamos Mensuales
-        doc.setFillColor(248,249,250);
-        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
-        doc.roundedRect(108, 26, 88, 68, 2, 2, 'FD');
-        doc.setTextColor(44,62,80);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.text("PRESTAMOS MENSUALES 2026", 152, 33, {align:'center'});
-        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
-        doc.text("Uso total  -  Lab  -  Reemplazos  -  Danos", 152, 38, {align:'center'});
-        const anualCanvas = document.getElementById('chartAnual');
-        try {
-            const aImg = anualCanvas.toDataURL("image/png",1.0);
-            doc.addImage(aImg, 'PNG', 110, 40, 84, 50);
-        } catch(e) {}
-
-        // ── Fila 2: Préstamos por Docente (ancho completo) ──
-        doc.setFillColor(248,249,250);
-        doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
-        doc.roundedRect(14, 99, 182, 82, 2, 2, 'FD');
-        doc.setTextColor(44,62,80);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.text("PRESTAMOS POR DOCENTE", 105, 106, {align:'center'});
-        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
-        doc.text("Cantidad de prestamos registrados por cada profesor en el mes seleccionado", 105, 111, {align:'center'});
-        const docenteCanvas = document.getElementById('chartDocente');
-        try {
-            const dImg = docenteCanvas.toDataURL("image/png",1.0);
-            doc.addImage(dImg, 'PNG', 16, 113, 178, 64);
-        } catch(e) {}
-
-        // ── Fila 3: Tabla resumen por semana ──
-        const semanas = [1,2,3,4];
-        const semanaRows = semanas.map(s => {
-            const dInicio = (s-1)*7+1, dFin = s*7;
-            const reg = mesData.filter(d => {
-                const dia = new Date(d.fecha+"T00:00:00").getDate();
-                return dia >= dInicio && dia <= dFin;
-            });
-            const chrTotal = reg.reduce((sum,d)=>sum+parseInt(d.chromebooks||0),0);
-            const reeTotal = reg.reduce((sum,d)=>sum+parseInt(d.reemplazo||0),0);
-            const okReg = reg.filter(d=>(parseInt(d.chromebooks)+parseInt(d.reemplazo))===parseInt(d.devueltos)&&parseInt(d.devueltos)>0).length;
-            return [
-                `Semana ${s}  (dias ${dInicio}-${dFin})`,
-                reg.length,
-                chrTotal,
-                reeTotal,
-                okReg,
-                reg.length > 0 ? Math.round(okReg/reg.length*100)+'%' : '-'
-            ];
-        });
-
-        doc.setTextColor(44,62,80);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.text("RESUMEN POR SEMANA", 14, 189);
-
-        doc.autoTable({
-            startY: 192,
-            head: [['Periodo','Prestamos','Chromebooks','Reemplazos','Devueltos OK','Tasa']],
-            body: semanaRows,
-            headStyles: { fillColor:[0,51,102], fontSize:7.5, fontStyle:'bold', textColor:255 },
-            bodyStyles: { fontSize:7.5 },
-            alternateRowStyles: { fillColor:[245,248,255] },
-            columnStyles: {
-                0: { cellWidth:58 },
-                1: { cellWidth:25, halign:'center' },
-                2: { cellWidth:30, halign:'center' },
-                3: { cellWidth:28, halign:'center' },
-                4: { cellWidth:28, halign:'center' },
-                5: { cellWidth:13, halign:'center', fontStyle:'bold' }
-            },
-            margin: { left:14, right:14 }
-        });
-
-        // ── Alertas del mes (solo si hay daños o pendientes) ──
-        const conDanio   = mesData.filter(d=>(d.observacion||"").toLowerCase().includes("dan"));
-        const pendientes = mesData.filter(d=>(parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0))>parseInt(d.devueltos||0)&&!(d.observacion||"").toLowerCase().includes("dan"));
-
-        if(conDanio.length > 0 || pendientes.length > 0) {
-            const alertY = doc.lastAutoTable.finalY + 8;
-            doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(180,0,0);
-            doc.text("ALERTAS DEL MES", 14, alertY);
-
-            const alertRows = [
-                ...conDanio.map(d    => ['DANO',     d.fecha.split('-').reverse().slice(0,2).join('/'), d.profesor, d.curso, d.observacion]),
-                ...pendientes.map(d  => ['PENDIENTE',d.fecha.split('-').reverse().slice(0,2).join('/'), d.profesor, d.curso, `Chr:${d.chromebooks} Ree:${d.reemplazo} Dev:${d.devueltos}`])
-            ];
-
-            doc.autoTable({
-                startY: alertY + 3,
-                head: [['Tipo','Fecha','Profesor','Curso','Detalle']],
-                body: alertRows,
-                headStyles: { fillColor:[180,0,0], fontSize:7, fontStyle:'bold', textColor:255 },
-                bodyStyles: { fontSize:7 },
-                columnStyles: {
-                    0: { cellWidth:22 },
-                    1: { cellWidth:18, halign:'center' },
-                    2: { cellWidth:55 },
-                    3: { cellWidth:22, halign:'center' },
-                    4: { cellWidth:'auto' }
-                },
-                margin: { left:14, right:14 }
-            });
-        }
-
-        // ══════════════════════════════════════
-        // FOOTER en todas las páginas
-        // ══════════════════════════════════════
-        const pageCount = doc.internal.getNumberOfPages();
-        for(let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFillColor(0,51,102);
-            doc.rect(0, 287, 210, 10, 'F');
-            doc.setFontSize(7); doc.setTextColor(255,255,255);
-            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 293);
-            doc.text(`Página ${i} de ${pageCount}`, 196, 293, { align:'right' });
-        }
-
-        restorePages();
-        doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
-    };
-
-    img.onload  = () => {
-        // Mostrar página stats para que los canvas sean visibles
-        const pageStats = document.getElementById('pageStats');
-        const pageReg   = document.getElementById('pageRegistros');
-        const wasHidden = pageStats && pageStats.style.display === 'none';
-        if(wasHidden) {
-            pageStats.style.display = 'block';
-            pageReg.style.display   = 'none';
-            Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
-        }
-        // Esperar a que Chart.js redibuje antes de capturar
-        setTimeout(buildPDF, 400);
-    };
-    img.onerror = () => setTimeout(buildPDF, 400);
-}
-
-function exportToCSV() {
-    const mesActual = mNames[viewDate.getMonth()];
-    const rows = [['ID', 'Fecha', 'Hora', 'Curso', 'Asignatura', 'Profesor', 'Chromebooks', 'Reemplazos', 'Devueltos', 'Observacion']];
-    const csvData = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-
-    if(csvData.length === 0) {
-        Swal.fire('Sin datos', 'No hay registros en este mes para exportar', 'info');
-        return;
-    }
-
-    csvData.forEach(r => {
-        rows.push([r.id, r.fecha, r.hora, r.curso, r.asignatura, r.profesor, r.chromebooks, r.reemplazo, r.devueltos, `"${r.observacion}"`]);
-    });
-
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Data_Chromebooks_${mesActual}_2026.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-
-
-// ── MEJORA 3: PDF desde tabla visible ──────────────────────────────────
-function generatePDFFiltrado() {
-    const datos = window._lastSortedData || [];
-    if(!datos || datos.length === 0) {
-        Swal.fire('Sin datos', 'No hay registros visibles para exportar.', 'info');
-        return;
-    }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape' });
-    const mesActual = mNames[viewDate.getMonth()];
-    const anioActual = viewDate.getFullYear();
-    const ahora = new Date().toLocaleDateString('es-CL');
-    const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = logoUrl;
-
-    const buildPDF = () => {
-        // Header
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 297, 28, 'F');
-        try { doc.addImage(img, 'PNG', 268, 2, 16, 22); } catch(e) {}
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(16); doc.setFont("helvetica", "bold");
-        doc.text("GESTIÓN CHROMEBOOKS 2026 – NSG", 10, 13);
-        doc.setFontSize(9); doc.setFont("helvetica", "normal");
-        doc.text(`Reporte filtrado: ${mesActual} ${anioActual}  |  Generado: ${ahora}  |  ${datos.length} registros`, 10, 22);
-
-        // Tabla
-        const body = datos.map(r => {
-            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
-            const isDamaged = (r.observacion||"").toLowerCase().includes("dañ");
-            const totalOut = parseInt(r.chromebooks||0) + parseInt(r.reemplazo||0);
-            const isOK = totalOut === parseInt(r.devueltos||0);
-            let estado = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
-            if(isDamaged) estado = r.observacion;
-            if(isLab) estado = (isLab ? '🟣 LAB | ' : '') + estado;
-            return [
-                r.fecha.split('-').reverse().slice(0,2).join('/'),
-                r.hora,
-                r.curso,
-                r.asignatura,
-                r.profesor,
-                r.chromebooks,
-                r.reemplazo,
-                r.devueltos,
-                estado
-            ];
-        });
-
-        doc.autoTable({
-            startY: 32,
-            head: [['Fecha','Bloque','Curso','Asignatura','Profesor','Chr.','Ree.','Dev.','Estado/Obs']],
-            body: body,
-            headStyles: { fillColor: [13, 104, 50], fontSize: 8, fontStyle: 'bold', textColor: 255 },
-            bodyStyles: { fontSize: 7.5 },
-            alternateRowStyles: { fillColor: [245, 250, 247] },
-            columnStyles: {
-                0: { cellWidth: 18 }, 1: { cellWidth: 16 }, 2: { cellWidth: 20 },
-                3: { cellWidth: 32 }, 4: { cellWidth: 48 },
-                5: { cellWidth: 12, halign: 'center' }, 6: { cellWidth: 12, halign: 'center' },
-                7: { cellWidth: 12, halign: 'center' }, 8: { cellWidth: 'auto' }
-            },
-            didParseCell: (data) => {
-                if(data.section === 'body') {
-                    const row = datos[data.row.index];
-                    const isDmg = (row.observacion||"").toLowerCase().includes("dañ");
-                    const isLb = row.uso_laboratorio === true || row.uso_laboratorio === "TRUE" || row.uso_laboratorio === "true";
-                    const tot = parseInt(row.chromebooks||0) + parseInt(row.reemplazo||0);
-                    const ok = tot === parseInt(row.devueltos||0);
-                    if(isDmg) data.cell.styles.fillColor = [255, 235, 235];
-                    else if(isLb) data.cell.styles.fillColor = [243, 238, 255];
-                    else if(!ok) data.cell.styles.fillColor = [255, 251, 230];
-                }
-            }
-        });
-
-        // Footer
-        const pageCount = doc.internal.getNumberOfPages();
-        for(let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8); doc.setTextColor(160);
-            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 10, 203);
-            doc.text(`Página ${i} de ${pageCount}`, 270, 203);
-        }
-
-        doc.save(`Reporte_Filtrado_${mesActual}_${anioActual}.pdf`);
-    };
-
-    img.onload = buildPDF;
-    img.onerror = buildPDF; // si no carga el logo, igual genera el PDF
-}
-
-// ── MEJORA 1: Resumen rápido por profesor ──────────────────────────────
-function verResumenProfesor(nombre) {
-    const registros = db.filter(d => d.profesor === nombre);
-    if(registros.length === 0) return;
-
-    const total = registros.length;
-    const ok = registros.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const pendientes = registros.filter(d => (parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0)) > parseInt(d.devueltos||0) && !d.observacion.toLowerCase().includes("dañ")).length;
-    const dañados = registros.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
-    const labs = registros.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-    const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
-    const totalChr = registros.reduce((s,d) => s + parseInt(d.chromebooks||0), 0);
-    const totalRee = registros.reduce((s,d) => s + parseInt(d.reemplazo||0), 0);
-
-    // Últimos 3 registros
-    const ultimos = [...registros].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).slice(0,3);
-    const ultimosHTML = ultimos.map(r => {
-        const f = r.fecha.split('-').reverse().slice(0,2).join('/');
-        return `<tr><td>${f}</td><td>${r.curso}</td><td>${r.asignatura}</td><td>${r.chromebooks}</td></tr>`;
-    }).join('');
-
-    Swal.fire({
-        title: `<span style="color:#2b5797">👤 ${nombre}</span>`,
-        html: `
-        <div style="text-align:left; font-size:0.9rem;">
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <div style="background:#f0fff4; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#0d6832">${total}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">PRÉSTAMOS</div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión Chromebooks 2026 - Franco</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner-border text-success" style="width: 3rem; height: 3rem;" role="status"></div>
+        <span class="mt-3 fw-bold text-dark">Sincronizando con el Panel de Franco...</span>
+    </div>
+
+    <div class="header-main">
+        <img src="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" alt="Icono" class="header-icon">
+        <div class="header-titles">
+            <h1>Gestión Chromebooks 2026</h1>
+            <p>Panel de Control Tec. Informático</p>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <button class="btn btn-primary btn-sm fw-bold px-3" style="background: var(--azul-inst); border: none;" onclick="generatePDF()">📄 REPORTE PDF PRO</button>
+        <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
+        <div class="d-flex gap-1" style="border-left:1px solid #ddd; padding-left:10px;">
+            <button class="btn btn-sm fw-bold px-3" id="btnPageRegistros" onclick="showPage('registros')" style="background:#0d6832; color:white; border:1.5px solid #0d6832;">📋 Registros</button>
+            <button class="btn btn-sm fw-bold px-3" id="btnPageStats" onclick="showPage('stats')" style="background:white; color:#555; border:1.5px solid #ddd;">📊 Estadísticas</button>
+        </div>
+        <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="month-selector">
+            <button class="nav-btn" onclick="moveMonth(-1)">❮</button>
+            <h2 class="m-0 fw-bold" id="displayDate" style="min-width: 250px; text-align: center; color: #2c3e50;">Cargando...</h2>
+            <button class="nav-btn" onclick="moveMonth(1)">❯</button>
+        </div>
+
+        <div class="week-tabs">
+            <button class="tab-btn active" id="t0" onclick="setFilterWeek(0)">Mes Completo</button>
+            <button class="tab-btn" id="t1" onclick="setFilterWeek(1)">Semana 1</button>
+            <button class="tab-btn" id="t2" onclick="setFilterWeek(2)">Semana 2</button>
+            <button class="tab-btn" id="t3" onclick="setFilterWeek(3)">Semana 3</button>
+            <button class="tab-btn" id="t4" onclick="setFilterWeek(4)">Semana 4</button>
+        </div>
+
+        <div class="kpi-row">
+            <!-- 1. Total Préstamos del Mes -->
+            <div class="kpi-card" onclick="resetApp()">
+                <h6>Total Préstamos del Mes</h6>
+                <div id="kpi-total" style="color: #107c41">0</div>
+            </div>
+            <!-- 2. Préstamos de la Semana (NUEVO - reemplaza Pendientes) -->
+            <div class="kpi-card" onclick="irASemanActual()" style="position:relative; overflow:hidden;">
+                <div id="kpiSemanaGlow" style="display:none; position:absolute; inset:0; background:linear-gradient(135deg,rgba(21,101,192,0.07),rgba(13,71,161,0.04)); border-radius:12px; pointer-events:none;"></div>
+                <h6 style="color:#1565c0;">Préstamos esta Semana</h6>
+                <div id="kpi-semana" style="color:#1976d2; position:relative;">0</div>
+                <div id="kpiSemanaLabel" style="font-size:0.65rem; color:#999; margin-top:4px; font-weight:600;">lun – vie</div>
+            </div>
+            <!-- 3. Uso de Laboratorio -->
+            <div class="kpi-card" onclick="setFilterMode('lab')">
+                <h6>Uso de Laboratorio</h6>
+                <div id="kpi-lab" style="color: #6f42c1">0</div>
+            </div>
+            <!-- 4. Uso de Reemplazos -->
+            <div class="kpi-card" onclick="setFilterMode('reemp')">
+                <h6>Uso de Reemplazos</h6>
+                <div id="kpi-reemp" style="color: #dc3545">0</div>
+            </div>
+            <!-- 5. Tasa Retorno OK -->
+            <div class="kpi-card" onclick="setFilterMode('ok')">
+                <h6>Tasa Retorno OK</h6>
+                <div id="kpi-ok" style="color: #198754">0%</div>
+            </div>
+            <!-- 6. Dañados -->
+            <div class="kpi-card" onclick="setFilterMode('damaged')">
+                <h6>Dañados</h6>
+                <div id="kpi-damaged" style="color: var(--danger-red)">0</div>
+            </div>
+        </div>
+
+        <!-- STOCK VISUAL -->
+        <div class="mx-4 mb-3">
+            <div class="p-3 rounded-3 shadow-sm" style="background:white; border:1px solid #eee;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold text-muted" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:1px;">📦 Stock de Equipos en Tiempo Real</span>
+                    <span class="fw-bold" style="font-size:0.8rem; color:#555;">
+                        <span id="stock-en-uso" style="color:#dc3545;">0</span> en préstamo &nbsp;·&nbsp;
+                        <span id="stock-disponible" style="color:#198754;">0</span> disponibles &nbsp;·&nbsp;
+                        Total: <span id="stock-total">40</span>
+                    </span>
                 </div>
-                <div style="background:#fff8f0; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#f39c12">${pendientes}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">PENDIENTES</div>
+                <div style="background:#f0f0f0; border-radius:20px; height:18px; overflow:hidden; position:relative;">
+                    <div id="stock-bar-uso" style="height:100%; background:linear-gradient(90deg,#dc3545,#ff6b6b); border-radius:20px 0 0 20px; transition:width 0.6s ease; width:0%;"></div>
+                    <div id="stock-bar-label" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:700; color:#333;"></div>
                 </div>
-                <div style="background:#f8f0ff; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#6f42c1">${labs}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">LABORATORIO</div>
+                <div class="d-flex justify-content-between mt-1" style="font-size:0.7rem; color:#999;">
+                    <span>0</span>
+                    <span id="stock-warning" style="color:#dc3545; font-weight:700; display:none;">⚠️ Stock al límite</span>
+                    <span id="stock-total-label">40 equipos</span>
                 </div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <div style="background:#f0f4ff; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#2b5797">${tasa}%</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">TASA RETORNO</div>
+        </div>
+
+        <div id="debtBanner" class="alert-banner mx-4 shadow-sm">
+            <span id="debtText">⚠️ Cargando alertas...</span>
+            <button class="btn btn-sm btn-warning ms-3 fw-bold" onclick="setFilterMode('debt')">Ver Pendientes</button>
+        </div>
+
+
+
+        <!-- ═══ PÁGINA: REGISTROS ═══ -->
+        <div id="pageRegistros">
+        <div class="px-4 mb-4">
+            <div class="content-card">
+                <div class="row g-2 mb-4">
+                    <div class="col-md-7">
+                        <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="debouncedRender()">
+                    </div>
+                    <div class="col-md-5">
+                        <select id="courseSelect" class="form-select form-select-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" onchange="renderAll()">
+                            <option value="">Todos los Cursos</option>
+                            <optgroup label="Básica">
+                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
+                            </optgroup>
+                            <optgroup label="Media">
+                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
+                            </optgroup>
+                        </select>
+                    </div>
                 </div>
-                <div style="background:#f5f5f5; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#333">${totalChr}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">CHR. TOTALES</div>
+                <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                    <small class="text-muted fw-semibold" id="recordCount"></small>
+                    <small class="text-muted">Ordenado por fecha más reciente</small>
                 </div>
-                <div style="background:#fff5f5; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#d32f2f">${dañados}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">CON DAÑOS</div>
+                <div class="table-res">
+                    <table class="table table-hover align-middle text-center mb-0" id="mainTable">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Estado/Obs</th><th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                    <div id="emptyState" class="text-center py-5" style="display: none;">
+                        <img src="https://cdn-icons-png.flaticon.com/512/7486/7486754.png" width="80" style="opacity: 0.5; margin-bottom: 15px;">
+                        <h6 class="text-muted fw-bold">No se encontraron registros</h6>
+                        <p class="text-muted small">Intenta con otro filtro o término de búsqueda.</p>
+                    </div>
                 </div>
             </div>
-            <div style="font-weight:700; color:#555; font-size:0.8rem; margin-bottom:6px;">ÚLTIMOS REGISTROS</div>
-            <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-                <thead><tr style="background:#f8f9fa; color:#555;">
-                    <th style="padding:5px 8px; text-align:left;">Fecha</th>
-                    <th style="padding:5px 8px;">Curso</th>
-                    <th style="padding:5px 8px;">Asignatura</th>
-                    <th style="padding:5px 8px;">Chr.</th>
-                </tr></thead>
-                <tbody>${ultimosHTML}</tbody>
-            </table>
-        </div>`,
-        showConfirmButton: false,
-        showCloseButton: true,
-        width: 520,
-        customClass: { popup: 'shadow-lg' }
-    });
-}
+        </div>
+        </div><!-- /pageRegistros -->
 
-window.onload = load;
+        <!-- ═══ PÁGINA: ESTADÍSTICAS ═══ -->
+        <div id="pageStats" style="display:none;">
+
+            <!-- Título de la página -->
+            <div class="px-4 mb-4">
+                <div class="d-flex align-items-center gap-3 py-2 px-3 rounded-3" style="background:white; border-left:5px solid #0d6832; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                    <span style="font-size:1.8rem;">📊</span>
+                    <div>
+                        <h5 class="mb-0 fw-bold" style="color:#0d6832;">Panel de Estadísticas</h5>
+                        <small class="text-muted">Visualización gráfica del uso de Chromebooks 2026</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila 1: Anual + Estado General -->
+            <div class="px-4 mb-4">
+                <div class="row g-4">
+                    <div class="col-lg-8">
+                        <div class="content-card h-100">
+                            <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">📈 Préstamos Mensuales 2026</h6>
+                            <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Evolución anual del uso total, laboratorio, reemplazos y equipos dañados</small>
+                            <div style="height:300px; width:100%;"><canvas id="chartAnual"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="content-card h-100">
+                            <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">📦 Estado General de Equipos</h6>
+                            <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Distribución de registros por estado de devolución en el mes actual</small>
+                            <div style="height:300px; width:100%;"><canvas id="chartStatus"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila 2: Docente full-width -->
+            <div class="px-4 mb-4">
+                <div class="content-card">
+                    <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">👩‍🏫 Préstamos por Docente</h6>
+                    <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Cantidad de préstamos registrados por cada profesor en el mes seleccionado</small>
+                    <div style="height:320px; width:100%;"><canvas id="chartDocente"></canvas></div>
+                </div>
+            </div>
+
+        </div><!-- /pageStats -->
+    </div><!-- /container-fluid -->
+
+    <div class="modal fade" id="resModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">📝 REGISTRO DE RESERVA</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-4">
+                <form id="resForm" class="row g-3 needs-validation" novalidate>
+                    <input type="hidden" id="fId"><input type="hidden" id="fEstado"><input type="hidden" id="fFechaCierre"><input type="hidden" id="fRespCierre"><input type="hidden" id="fLabHidden">
+                    <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control" onchange="saveDraft()" required></div>
+                    <div class="col-md-6">
+                        <label class="fw-bold small text-muted">HORA DE AGENDA</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0"><small>🕐</small></span>
+                            <input type="time" id="fHora" class="form-control" oninput="saveDraft()" placeholder="HH:MM" required>
+                        </div>
+                        <small class="text-muted" style="font-size:0.7rem;">Ingrese la hora manualmente (ej: 08:10)</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="fw-bold small text-muted">CURSO</label>
+                        <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
+                            <option value="">Seleccione curso...</option>
+                            <optgroup label="Básica">
+                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
+                            </optgroup>
+                            <optgroup label="Media">
+                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
+                            </optgroup>
+                            <optgroup label="Especial">
+                                <option value="ELECTIVO">ELECTIVO</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()" required></div>
+                    <div class="col-12">
+                        <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
+                                <option value="">Seleccione un docente...</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
+                    <div class="col-md-4">
+                        <label class="fw-bold small text-danger">REEMPLAZOS</label>
+                        <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(true); toggleNroEquipo()" value="0" min="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="fw-bold small text-success">DEVUELTOS</label>
+                        <input type="number" id="fDev" class="form-control" oninput="validateCounts()" value="0" min="0">
+                        <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
+                        <small id="valMsgStock" class="text-warning fw-bold" style="display:none; background:#fff3cd; padding:2px 8px; border-radius:4px;"></small>
+                    </div>
+                    <!-- N° Equipo de Reemplazo -->
+                    <div class="col-12" id="nroEquipoWrapper" style="display:none;">
+                        <div class="p-3 rounded-3" style="background:#fff5f5; border:1.5px solid #dc3545;">
+                            <label class="fw-bold small text-danger d-block mb-2">🔴 EQUIPO DE REEMPLAZO ASIGNADO</label>
+                            <div class="d-flex gap-2 flex-wrap" id="equipoReemplazoOpciones">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq1" value="Equipo 1" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq1" style="color:#b71c1c;">📦 Equipo 1</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq2" value="Equipo 2" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq2" style="color:#b71c1c;">📦 Equipo 2</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq3" value="Equipo 3" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq3" style="color:#b71c1c;">📦 Equipo 3</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq4" value="Equipo 4" onchange="saveDraft()">
+                                    <label class="form-check-label fw-bold" for="eq4" style="color:#b71c1c;">📦 Equipo 4</label>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.7rem;">Selecciona el equipo de reemplazo que se entregó al docente</small>
+                        </div>
+                    </div>
+                    <!-- Estado de Devolución -->
+                    <div class="col-12">
+                        <div class="p-3 rounded-3" style="background:#f0f9ff; border:1.5px solid #0288d1;">
+                            <label class="fw-bold small d-block mb-2" style="color:#0277bd; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.5px;">📋 ESTADO DE LA DEVOLUCIÓN</label>
+                            <div class="d-flex gap-2 flex-wrap" id="estadoDevWrapper">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edOk" value="ok" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-success" for="edOk">✅ Sin novedad</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edPendiente" value="pendiente" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-warning" for="edPendiente">⏳ Pendiente</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edDanio" value="danio" onchange="onEstadoDevChange()">
+                                    <label class="form-check-label fw-bold text-danger" for="edDanio">🔴 Con daño</label>
+                                </div>
+                            </div>
+                            <!-- Campo tipo de daño (visible solo si se marca "Con daño") -->
+                            <div id="tipoDanioWrapper" style="display:none; margin-top:10px;">
+                                <label class="fw-bold small text-danger mb-1 d-block">TIPO DE DAÑO</label>
+                                <input type="text" id="fTipoDanio" class="form-control border-danger" 
+                                       placeholder="Describe el daño (ej: pantalla rayada, tecla rota...)" 
+                                       oninput="saveDraft()">
+                                <small class="text-muted" style="font-size:0.7rem;">Ingrese el tipo de daño manualmente</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#f3f0ff; border: 1.5px solid #6f42c1;">
+                            <div>
+                                <div class="fw-bold" style="color:#6f42c1; font-size:0.95rem;">🟣 USO DE LABORATORIO</div>
+                                <div class="text-muted" style="font-size:0.78rem;">Marcar si la clase se realizó en el laboratorio de computación</div>
+                            </div>
+                            <div class="form-check form-switch mb-0 ms-3">
+                                <input class="form-check-input" type="checkbox" id="fLab" role="switch" 
+                                       style="width:3em; height:1.6em; cursor:pointer; accent-color:#6f42c1;"
+                                       onchange="saveDraft()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12" id="obsSelectWrapper"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
+                        <div id="obsNuevaReservaInfo" class="d-flex align-items-center gap-2 p-2 rounded-2" style="background:#eceff1; border:1.5px solid #b0bec5;">
+                            <span style="font-size:1.1rem;">🕐</span>
+                            <div>
+                                <div style="font-size:0.82rem; font-weight:700; color:#546e7a;">Se registrará como <b>"Pendiente"</b> automáticamente</div>
+                                <div style="font-size:0.7rem; color:#90a4ae;">Podrás editarla una vez que el docente devuelva los equipos</div>
+                            </div>
+                        </div>
+                        <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()" style="display:none;">
+                            <option value="Sin novedad">✅ Sin novedad</option>
+                            <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
+                            <option value="Teclado Falla">🟠 Teclado Falla</option>
+                            <option value="No Enciende">⚫ No Enciende</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="obsEditWrapper" style="display:none;">
+                        <label class="fw-bold small text-muted d-flex align-items-center gap-2">
+                            OBSERVACIÓN TÉCNICO 
+                            <span class="badge bg-success" style="font-size:0.65rem;">✏️ EDITABLE – Equipos devueltos</span>
+                        </label>
+                        <textarea id="fObsEdit" class="form-control border-success shadow-sm" rows="2" 
+                                  placeholder="Ingrese observación del técnico tras la devolución..." 
+                                  oninput="saveDraft()" style="resize:none; font-size:0.9rem;"></textarea>
+                        <small class="text-success fw-bold" style="font-size:0.7rem;">🔓 Este campo es editable porque los equipos ya fueron devueltos</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer p-3 bg-light"><button class="btn btn-success w-100 py-3 fw-bold shadow" onclick="saveData()">GUARDAR CAMBIOS EN GOOGLE SHEETS</button></div>
+        </div></div>
+    </div>
+
+    <footer class="footer">
+        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Responsable Técnico: <b>Franco San Martín</b>
+    </footer>
+
+    <script src="scripts.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
