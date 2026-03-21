@@ -18,7 +18,7 @@ function calcEstado(chr,ree,dev,obs,lab){
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
 }
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxN2XQAMGfzqDHYkAdfdPrkQ6d6Mni72WRZajuQyyewjDhVAdemvVuUrN0SUY54x_o/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHI_6GzuaT1BoJWhoMh-6YF_08AsLksgmGO9ImkDTmpKB9nT2SkRZaz0mKPIyGB8k/exec";
 // Inicializar con la fecha actual
 const _hoy = new Date();
 const _diaHoy = _hoy.getDate();
@@ -301,16 +301,31 @@ function updateKPIs(base) {
     if (glowSemana)  glowSemana.style.display = prestSemana > 0 ? 'block' : 'none';
 
     // ── Barra de stock en tiempo real ──────────────────────────────────
-    // Equipos "en préstamo" = registros ACTIVOS del mes (pendientes de devolución)
-    const enUso = base.filter(d => {
-        const total = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+    // Separar chromebooks regulares de equipos de reemplazo
+    const enUsoChr = base.filter(d => {
+        const chr = parseInt(d.chromebooks||0);
         const dev = parseInt(d.devueltos||0);
+        const ree = parseInt(d.reemplazo||0);
         const isDmg = (d.observacion||"").toLowerCase().includes("dañ");
-        return total > dev && !isDmg;
+        return (chr + ree) > dev && !isDmg;
     }).reduce((sum, d) => {
-        return sum + (parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0) - parseInt(d.devueltos||0));
+        // Solo contar chromebooks regulares en la barra principal
+        const chr = parseInt(d.chromebooks||0);
+        const dev = parseInt(d.devueltos||0);
+        const ree = parseInt(d.reemplazo||0);
+        const pendiente = Math.max(0, chr + ree - dev);
+        return sum + Math.min(chr, pendiente); // solo los chr, no los de reemplazo
     }, 0);
 
+    const enUsoRee = base.filter(d => {
+        const ree = parseInt(d.reemplazo||0);
+        const dev = parseInt(d.devueltos||0);
+        const chr = parseInt(d.chromebooks||0);
+        const isDmg = (d.observacion||"").toLowerCase().includes("dañ");
+        return ree > 0 && (chr + ree) > dev && !isDmg;
+    }).reduce((sum, d) => sum + parseInt(d.reemplazo||0), 0);
+
+    const enUso = enUsoChr; // la barra solo refleja chromebooks regulares
     const disponible = Math.max(0, STOCK_MAXIMO - enUso);
     const pct = Math.min(100, Math.round((enUso / STOCK_MAXIMO) * 100));
 
@@ -330,10 +345,10 @@ function updateKPIs(base) {
     if(barEl) { barEl.style.width = pct + '%'; barEl.style.background = barColor; }
     if(labelEl) labelEl.textContent = enUso > 0 ? `${pct}% en uso` : '';
     if(warningEl) warningEl.style.display = pct >= 85 ? 'block' : 'none';
-    if(enUsoEl) enUsoEl.textContent = enUso;
+    if(enUsoEl) enUsoEl.textContent = enUso + (enUsoRee > 0 ? ` (+${enUsoRee} reemplazo)` : '');
     if(disponibleEl) disponibleEl.textContent = disponible;
-    if(totalEl) totalEl.textContent = STOCK_MAXIMO;
-    if(totalLabelEl) totalLabelEl.textContent = `${STOCK_MAXIMO} equipos`;
+    if(totalEl) totalEl.textContent = `${STOCK_MAXIMO} + ${STOCK_REEMPLAZO}`;
+    if(totalLabelEl) totalLabelEl.textContent = `${STOCK_MAXIMO} Chromebooks · ${STOCK_REEMPLAZO} Reemplazos`;
 }
 
 // 4. Charts - CORRECCIÓN DE ESCALA Y VISIBILIDAD DE NOMBRES
@@ -484,6 +499,35 @@ function irASemanActual() {
     }, 150);
 }
 
+function showPage(page) {
+    const pageReg  = document.getElementById('pageRegistros');
+    const pageStat = document.getElementById('pageStats');
+    const btnReg   = document.getElementById('btnPageRegistros');
+    const btnStat  = document.getElementById('btnPageStats');
+
+    if (page === 'stats') {
+        pageReg.style.display  = 'none';
+        pageStat.style.display = 'block';
+        btnReg.style.background  = 'white';
+        btnReg.style.color       = '#555';
+        btnReg.style.border      = '1.5px solid #ddd';
+        btnStat.style.background = '#0d6832';
+        btnStat.style.color      = 'white';
+        btnStat.style.border     = '1.5px solid #0d6832';
+        // Forzar resize de Chart.js para que dibuje correctamente en el nuevo contenedor visible
+        setTimeout(() => { Object.values(charts).forEach(c => { if(c) c.resize(); }); }, 50);
+    } else {
+        pageStat.style.display = 'none';
+        pageReg.style.display  = 'block';
+        btnStat.style.background = 'white';
+        btnStat.style.color      = '#555';
+        btnStat.style.border     = '1.5px solid #ddd';
+        btnReg.style.background  = '#0d6832';
+        btnReg.style.color       = 'white';
+        btnReg.style.border      = '1.5px solid #0d6832';
+    }
+}
+
 function toggleNroEquipo() {
     const ree = parseInt(document.getElementById('fRee').value || 0);
     const wrapper = document.getElementById('nroEquipoWrapper');
@@ -586,7 +630,8 @@ async function saveData() {
     }
 }
 
-const STOCK_MAXIMO = 115; // ← Cambia este número según tus equipos disponibles
+const STOCK_MAXIMO = 115;      // Chromebooks regulares
+const STOCK_REEMPLAZO = 4;     // Equipos de reemplazo (no cuentan en el stock principal)
 
 function validateCounts(autoFill) {
     const chr = parseInt(document.getElementById('fChr').value || 0);
@@ -753,79 +798,157 @@ function generatePDF() {
     const mesActual = mNames[viewDate.getMonth()];
     const anioActual = viewDate.getFullYear();
     const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
+    const fechaEmision = new Date().toLocaleDateString('es-CL');
     
     const mesData = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
         return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
-    doc.setFillColor(0, 51, 102); 
-    doc.rect(0, 0, 210, 40, 'F');
-    
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.src = logoUrl;
-    img.onload = function() {
-        doc.addImage(img, 'PNG', 165, 5, 25, 30);
+
+    const buildPDF = () => {
+        // ══════════════════════════════════════
+        // PÁGINA 1 – RESUMEN EJECUTIVO
+        // ══════════════════════════════════════
+
+        // Header azul institucional
+        doc.setFillColor(0, 51, 102);
+        doc.rect(0, 0, 210, 42, 'F');
+        try { doc.addImage(img, 'PNG', 170, 4, 22, 28); } catch(e) {}
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
-        doc.setFont("helvetica", "bold");
-        doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 25);
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "normal");
-        doc.text(`REPORTE MENSUAL: ${mesActual.toUpperCase()} ${anioActual}`, 14, 33);
-        
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text("Resumen Estadístico", 14, 55);
-        
-        const total = mesData.length;
-        const ok = mesData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos)).length;
-        const dmg = mesData.filter(d => d.estado_operativo==='DAÑADO').length;
-        const activos=mesData.filter(d=>d.estado_operativo==='ACTIVO').length;
+        doc.setFontSize(20); doc.setFont("helvetica", "bold");
+        doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 20);
+        doc.setFontSize(10); doc.setFont("helvetica", "normal");
+        doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 30);
+        doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 37);
 
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Total de Préstamos: ${total}`, 14, 65);
-        doc.text(`Devoluciones Completas: ${ok}`, 14, 72);
-        doc.text(`Equipos con Daños: ${dmg}`, 14, 79);
-        doc.text(`Préstamos Activos: ${activos}`,14,86);
-        doc.text(`Tasa de Retorno: ${total > 0 ? Math.round((ok/total)*100) : 0}%`, 130, 65);
-        doc.text(`Generado por: Franco (Tec. Informático)`, 130, 72);
-        doc.text(`Fecha emisión: ${new Date().toLocaleDateString()}`, 130, 79);
+        // ── KPIs en tarjetas ──
+        const total   = mesData.length;
+        const ok      = mesData.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+        const dmg     = mesData.filter(d => (d.observacion||"").toLowerCase().includes("dañ")).length;
+        const activos = mesData.filter(d => (parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0)) > parseInt(d.devueltos||0) && !(d.observacion||"").toLowerCase().includes("dañ")).length;
+        const labs    = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
+        const reemp   = mesData.filter(d => parseInt(d.reemplazo||0) > 0).length;
+        const tasa    = total > 0 ? Math.round((ok/total)*100) : 0;
 
-        const chartCanvas = document.getElementById('chartStatus');
-        const chartImg = chartCanvas.toDataURL("image/png", 1.0);
-        doc.text("Distribución de Estado", 140, 95);
-        doc.addImage(chartImg, 'PNG', 140, 100, 50, 50);
+        const kpis = [
+            { label: 'Total Préstamos', value: total,    color: [13,104,50] },
+            { label: 'Devoluciones OK', value: ok,       color: [25,135,84] },
+            { label: 'Pendientes',      value: activos,  color: [255,193,7] },
+            { label: 'Con Daños',       value: dmg,      color: [211,47,47] },
+            { label: 'Uso Laboratorio', value: labs,     color: [111,66,193] },
+            { label: 'Con Reemplazos',  value: reemp,    color: [220,53,69] },
+        ];
 
-        const docentesMap = {}; 
-        mesData.forEach(d => { docentesMap[d.profesor] = (docentesMap[d.profesor] || 0) + 1; });
-        const topDocentes = Object.entries(docentesMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
-
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text("Uso por Docente (Top 15)", 14, 95);
-
-        doc.autoTable({
-            startY: 100,
-            head: [['#', 'Docente Responsable', 'Préstamos']],
-            body: topDocentes.map((d, i) => [i + 1, d[0], d[1]]),
-            headStyles: { fillColor: [0, 51, 102], fontSize: 11 },
-            alternateRowStyles: { fillColor: [245, 245, 245] },
-            margin: { right: 80 }
+        // KPIs — 6 tarjetas que caben exactamente en 182mm (14 a 196)
+        const kpiW = 27, kpiH = 20, kpiY0 = 50;
+        const totalW = kpiW * 6 + 5 * 4; // 6 tarjetas + 5 gaps de 4mm = 182mm exacto
+        const kpiX0 = 14;
+        kpis.forEach((k, i) => {
+            const x = kpiX0 + i * (kpiW + 4);
+            doc.setFillColor(...k.color);
+            doc.roundedRect(x, kpiY0, kpiW, kpiH, 2, 2, 'F');
+            doc.setTextColor(255,255,255);
+            doc.setFontSize(13); doc.setFont("helvetica","bold");
+            doc.text(String(k.value), x + kpiW/2, kpiY0 + 9, { align:'center' });
+            doc.setFontSize(5.5); doc.setFont("helvetica","normal");
+            doc.text(k.label.toUpperCase(), x + kpiW/2, kpiY0 + 16, { align:'center' });
         });
 
+        // Tasa de retorno destacada
+        doc.setFillColor(0, 51, 102);
+        doc.roundedRect(14, 77, 182, 10, 2, 2, 'F');
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(9); doc.setFont("helvetica","bold");
+        doc.text(`TASA DE RETORNO DEL MES: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 84, { align:'center' });
+
+        // ── Gráfico de estado — a la derecha, mismo nivel que título de tabla ──
+        const chartCanvas = document.getElementById('chartStatus');
+        try {
+            const chartImg = chartCanvas.toDataURL("image/png", 1.0);
+            doc.setTextColor(44,62,80);
+            doc.setFontSize(8); doc.setFont("helvetica","bold");
+            doc.text("DISTRIBUCIÓN DE ESTADO", 157, 93, { align:'center' });
+            doc.addImage(chartImg, 'PNG', 130, 95, 66, 48);
+        } catch(e) {}
+
+        // ── Tabla de todos los docentes — ancho completo ──
+        const docentesMap = {};
+        mesData.forEach(d => {
+            const k = d.profesor ? d.profesor.trim() : "—";
+            if(!docentesMap[k]) docentesMap[k] = { total:0, ok:0, reemp:0, lab:0, dmg:0 };
+            docentesMap[k].total++;
+            if((parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
+            if(parseInt(d.reemplazo||0) > 0) docentesMap[k].reemp++;
+            if(d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
+            if((d.observacion||"").toLowerCase().includes("dañ")) docentesMap[k].dmg++;
+        });
+
+        const todosDocentes = Object.entries(docentesMap)
+            .sort((a, b) => b[1].total - a[1].total);
+
+        doc.setTextColor(44,62,80);
+        doc.setFontSize(11); doc.setFont("helvetica","bold");
+        doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 93);
+
+        doc.autoTable({
+            startY: 97,
+            head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
+            body: todosDocentes.map(([nombre, v], i) => [
+                i + 1,
+                nombre,
+                v.total,
+                v.ok,
+                v.reemp > 0 ? `Sí (${v.reemp})` : '—',
+                v.lab   > 0 ? `Sí (${v.lab})`   : '—',
+                v.dmg   > 0 ? v.dmg              : '—'
+            ]),
+            headStyles: { fillColor: [0,51,102], fontSize: 8, fontStyle:'bold', textColor:255 },
+            bodyStyles: { fontSize: 8 },
+            alternateRowStyles: { fillColor: [245,248,255] },
+            tableWidth: 'auto',
+            columnStyles: {
+                0: { cellWidth: 10,  halign:'center' },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 24, halign:'center' },
+                3: { cellWidth: 22, halign:'center' },
+                4: { cellWidth: 26, halign:'center' },
+                5: { cellWidth: 22, halign:'center' },
+                6: { cellWidth: 18, halign:'center' }
+            },
+            margin: { left: 14, right: 14 },
+            didParseCell: (data) => {
+                if(data.section === 'body' && data.column.index === 6) {
+                    if(data.cell.raw !== '—') data.cell.styles.textColor = [211,47,47];
+                }
+                if(data.section === 'body' && data.column.index === 2) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.textColor = [0,51,102];
+                }
+            }
+        });
+
+        // ══════════════════════════════════════
+        // FOOTER en todas las páginas
+        // ══════════════════════════════════════
         const pageCount = doc.internal.getNumberOfPages();
         for(let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
-            doc.setFontSize(9);
-            doc.setTextColor(150);
-            doc.text("Este documento es un reporte oficial del área de Informática NSG.", 14, 285);
-            doc.text(`Página ${i} de ${pageCount}`, 180, 285);
+            doc.setFillColor(0,51,102);
+            doc.rect(0, 287, 210, 10, 'F');
+            doc.setFontSize(7); doc.setTextColor(255,255,255);
+            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 293);
+            doc.text(`Página ${i} de ${pageCount}`, 196, 293, { align:'right' });
         }
-        doc.save(`Reporte_Franco_${mesActual}.pdf`);
+
+        doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
     };
+
+    img.onload  = buildPDF;
+    img.onerror = buildPDF;
 }
 
 function exportToCSV() {
