@@ -30,8 +30,11 @@
 
     <div class="action-bar">
         <button class="btn btn-primary btn-sm fw-bold px-3" style="background: var(--azul-inst); border: none;" onclick="generatePDF()">📄 REPORTE PDF PRO</button>
-        <button class="btn btn-sm fw-bold px-3" style="background:#6f42c1; color:white; border:none;" onclick="generatePDFFiltrado()">📋 PDF TABLA ACTUAL</button>
         <button class="btn btn-success btn-sm fw-bold px-3" style="background:#0d6832" onclick="resetApp()">🏠 INICIO</button>
+        <div class="d-flex gap-1" style="border-left:1px solid #ddd; padding-left:10px;">
+            <button class="btn btn-sm fw-bold px-3" id="btnPageRegistros" onclick="showPage('registros')" style="background:#0d6832; color:white; border:1.5px solid #0d6832;">📋 Registros</button>
+            <button class="btn btn-sm fw-bold px-3" id="btnPageStats" onclick="showPage('stats')" style="background:white; color:#555; border:1.5px solid #ddd;">📊 Estadísticas</button>
+        </div>
         <button class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" onclick="openModal()">+ NUEVA RESERVA</button>
     </div>
 
@@ -115,6 +118,8 @@
 
 
 
+        <!-- ═══ PÁGINA: REGISTROS ═══ -->
+        <div id="pageRegistros">
         <div class="px-4 mb-4">
             <div class="content-card">
                 <div class="row g-2 mb-4">
@@ -143,7 +148,6 @@
                         </select>
                     </div>
                 </div>
-
                 <div class="d-flex justify-content-between align-items-center mb-2 px-1">
                     <small class="text-muted fw-semibold" id="recordCount"></small>
                     <small class="text-muted">Ordenado por fecha más reciente</small>
@@ -165,32 +169,52 @@
                 </div>
             </div>
         </div>
+        </div><!-- /pageRegistros -->
 
-        <!-- Gráficos debajo del panel principal -->
-        <div class="px-4 mb-4">
-            <div class="row g-4">
-                <div class="col-lg-5">
-                    <div class="content-card h-100">
-                        <h6 class="fw-bold mb-3 text-muted">Préstamos por Docente</h6>
-                        <div class="chart-box"><canvas id="chartDocente"></canvas></div>
+        <!-- ═══ PÁGINA: ESTADÍSTICAS ═══ -->
+        <div id="pageStats" style="display:none;">
+
+            <!-- Título de la página -->
+            <div class="px-4 mb-4">
+                <div class="d-flex align-items-center gap-3 py-2 px-3 rounded-3" style="background:white; border-left:5px solid #0d6832; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                    <span style="font-size:1.8rem;">📊</span>
+                    <div>
+                        <h5 class="mb-0 fw-bold" style="color:#0d6832;">Panel de Estadísticas</h5>
+                        <small class="text-muted">Visualización gráfica del uso de Chromebooks 2026</small>
                     </div>
                 </div>
-                <div class="col-lg-3">
-                    <div class="content-card h-100">
-                        <h6 class="fw-bold mb-3 text-muted">Estado General Equipos</h6>
-                        <div class="chart-box"><canvas id="chartStatus"></canvas></div>
+            </div>
+
+            <!-- Fila 1: Anual + Estado General -->
+            <div class="px-4 mb-4">
+                <div class="row g-4">
+                    <div class="col-lg-8">
+                        <div class="content-card h-100">
+                            <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">📈 Préstamos Mensuales 2026</h6>
+                            <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Evolución anual del uso total, laboratorio, reemplazos y equipos dañados</small>
+                            <div style="height:300px; width:100%;"><canvas id="chartAnual"></canvas></div>
+                        </div>
                     </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="content-card h-100 shadow-sm border-0">
-                        <h5 class="fw-bold text-success mb-3">📈 Préstamos Mensuales 2026</h5>
-                        <div style="height: 250px; width: 100%;">
-                            <canvas id="chartAnual"></canvas>
+                    <div class="col-lg-4">
+                        <div class="content-card h-100">
+                            <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">📦 Estado General de Equipos</h6>
+                            <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Distribución de registros por estado de devolución en el mes actual</small>
+                            <div style="height:300px; width:100%;"><canvas id="chartStatus"></canvas></div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <!-- Fila 2: Docente full-width -->
+            <div class="px-4 mb-4">
+                <div class="content-card">
+                    <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">👩‍🏫 Préstamos por Docente</h6>
+                    <small class="text-muted d-block mb-3" style="font-size:0.7rem;">Cantidad de préstamos registrados por cada profesor en el mes seleccionado</small>
+                    <div style="height:320px; width:100%;"><canvas id="chartDocente"></canvas></div>
+                </div>
+            </div>
+
+        </div><!-- /pageStats -->
     </div><!-- /container-fluid -->
 
     <div class="modal fade" id="resModal" tabindex="-1">
@@ -352,7 +376,7 @@
     </div>
 
     <footer class="footer">
-        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Responsable Técnico: Franco San Martín
+        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Responsable Técnico: <b>Franco San Martín</b>
     </footer>
 
     <script src="scripts.js"></script>
