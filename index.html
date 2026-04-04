@@ -55,36 +55,47 @@
 
         <div class="kpi-row">
             <!-- 1. Total Préstamos del Mes -->
-            <div class="kpi-card" onclick="resetApp()">
-                <h6>Total Préstamos del Mes</h6>
-                <div id="kpi-total" style="color: #107c41">0</div>
+            <div class="kpi-card" onclick="resetApp()" title="Ver todos los registros del mes">
+                <h6>Total Préstamos</h6>
+                <div class="kpi-value" id="kpi-total" style="color:#107c41">0</div>
+                <div id="kpi-total-trend" class="kpi-trend neu">cargando...</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-total-bar" style="background:#107c41;width:0%"></div></div>
             </div>
-            <!-- 2. Préstamos de la Semana (NUEVO - reemplaza Pendientes) -->
-            <div class="kpi-card" onclick="irASemanActual()" style="position:relative; overflow:hidden;">
-                <div id="kpiSemanaGlow" style="display:none; position:absolute; inset:0; background:linear-gradient(135deg,rgba(21,101,192,0.07),rgba(13,71,161,0.04)); border-radius:12px; pointer-events:none;"></div>
-                <h6 style="color:#1565c0;">Préstamos esta Semana</h6>
-                <div id="kpi-semana" style="color:#1976d2; position:relative;">0</div>
-                <div id="kpiSemanaLabel" style="font-size:0.65rem; color:#999; margin-top:4px; font-weight:600;">lun – vie</div>
+            <!-- 2. Préstamos de la Semana -->
+            <div class="kpi-card" onclick="irASemanActual()" title="Ver préstamos de esta semana" style="position:relative;">
+                <div id="kpiSemanaGlow" style="display:none;position:absolute;inset:0;background:linear-gradient(135deg,rgba(21,101,192,0.07),rgba(13,71,161,0.04));border-radius:12px;pointer-events:none;"></div>
+                <h6 style="color:#1565c0;">Esta Semana</h6>
+                <div class="kpi-value" id="kpi-semana" style="color:#1976d2">0</div>
+                <div id="kpiSemanaLabel" style="font-size:0.65rem;color:#999;margin-top:5px;font-weight:600;">lun – vie</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-semana-bar" style="background:#1976d2;width:0%"></div></div>
             </div>
             <!-- 3. Uso de Laboratorio -->
-            <div class="kpi-card" onclick="setFilterMode('lab')">
-                <h6>Uso de Laboratorio</h6>
-                <div id="kpi-lab" style="color: #6f42c1">0</div>
+            <div class="kpi-card" onclick="setFilterMode('lab')" title="Filtrar clases de laboratorio">
+                <h6>Laboratorio</h6>
+                <div class="kpi-value" id="kpi-lab" style="color:#6f42c1">0</div>
+                <div id="kpi-lab-trend" class="kpi-trend neu">0% del mes</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-lab-bar" style="background:#6f42c1;width:0%"></div></div>
             </div>
             <!-- 4. Uso de Reemplazos -->
-            <div class="kpi-card" onclick="setFilterMode('reemp')">
-                <h6>Uso de Reemplazos</h6>
-                <div id="kpi-reemp" style="color: #dc3545">0</div>
+            <div class="kpi-card" onclick="setFilterMode('reemp')" title="Filtrar uso de equipos de reemplazo">
+                <h6>Reemplazos</h6>
+                <div class="kpi-value" id="kpi-reemp" style="color:#dc3545">0</div>
+                <div id="kpi-reemp-trend" class="kpi-trend neu">0% del mes</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-reemp-bar" style="background:#dc3545;width:0%"></div></div>
             </div>
             <!-- 5. Tasa Retorno OK -->
-            <div class="kpi-card" onclick="setFilterMode('ok')">
-                <h6>Tasa Retorno OK</h6>
-                <div id="kpi-ok" style="color: #198754">0%</div>
+            <div class="kpi-card" onclick="setFilterMode('ok')" title="Ver devoluciones sin novedad">
+                <h6>Tasa Retorno</h6>
+                <div class="kpi-value" id="kpi-ok" style="color:#198754">0%</div>
+                <div id="kpi-ok-trend" class="kpi-trend neu">cargando...</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-ok-bar" style="background:#198754;width:0%"></div></div>
             </div>
             <!-- 6. Dañados -->
-            <div class="kpi-card" onclick="setFilterMode('damaged')">
+            <div class="kpi-card" onclick="setFilterMode('damaged')" title="Ver equipos con daño reportado">
                 <h6>Dañados</h6>
-                <div id="kpi-damaged" style="color: var(--danger-red)">0</div>
+                <div class="kpi-value" id="kpi-damaged" style="color:var(--danger-red)">0</div>
+                <div id="kpi-damaged-trend" class="kpi-trend neu">sin cambio</div>
+                <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-damaged-bar" style="background:var(--danger-red);width:0%"></div></div>
             </div>
         </div>
 
@@ -114,6 +125,19 @@
         <div id="debtBanner" class="alert-banner mx-4 shadow-sm">
             <span id="debtText">⚠️ Cargando alertas...</span>
             <button class="btn btn-sm btn-warning ms-3 fw-bold" onclick="setFilterMode('debt')">Ver Pendientes</button>
+        </div>
+
+        <!-- ═══ PANEL DE ALERTAS PENDIENTES ═══ -->
+        <div class="mx-4 mb-4" id="alertasPanelWrapper" style="display:none;">
+            <div id="alertasPanel">
+                <div class="alertas-header">
+                    <h6>⚠️ Equipos Pendientes de Devolución</h6>
+                    <span class="alertas-count-badge" id="alertasCount">0</span>
+                </div>
+                <div class="alertas-body" id="alertasBody">
+                    <div class="alertas-empty">Sin pendientes 🎉</div>
+                </div>
+            </div>
         </div>
 
 
@@ -219,166 +243,240 @@
 
     <div class="modal fade" id="resModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">📝 REGISTRO DE RESERVA</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header bg-dark text-white py-3">
+                <h5 class="modal-title fw-bold">📝 REGISTRO DE RESERVA</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- INDICADOR DE PASOS -->
+            <div class="wizard-steps">
+                <div class="wizard-step active" id="wstep1">
+                    <div class="wizard-dot">1</div>
+                    <span class="wizard-label">Datos Básicos</span>
+                </div>
+                <div class="wizard-step" id="wstep2">
+                    <div class="wizard-dot">2</div>
+                    <span class="wizard-label">Equipos</span>
+                </div>
+                <div class="wizard-step" id="wstep3">
+                    <div class="wizard-dot">3</div>
+                    <span class="wizard-label">Confirmar</span>
+                </div>
+            </div>
+
             <div class="modal-body p-4">
-                <form id="resForm" class="row g-3 needs-validation" novalidate>
-                    <input type="hidden" id="fId"><input type="hidden" id="fEstado"><input type="hidden" id="fFechaCierre"><input type="hidden" id="fRespCierre"><input type="hidden" id="fLabHidden">
-                    <div class="col-md-6"><label class="fw-bold small text-muted">FECHA</label><input type="date" id="fFecha" class="form-control" onchange="saveDraft()" required></div>
-                    <div class="col-md-6">
-                        <label class="fw-bold small text-muted">HORA DE AGENDA</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-0"><small>🕐</small></span>
-                            <input type="time" id="fHora" class="form-control" oninput="saveDraft()" placeholder="HH:MM" required>
-                        </div>
-                        <small class="text-muted" style="font-size:0.7rem;">Ingrese la hora manualmente (ej: 08:10)</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="fw-bold small text-muted">CURSO</label>
-                        <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
-                            <option value="">Seleccione curso...</option>
-                            <optgroup label="Básica">
-                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
-                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
-                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
-                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
-                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
-                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
-                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
-                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
-                            </optgroup>
-                            <optgroup label="Media">
-                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
-                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
-                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
-                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
-                            </optgroup>
-                            <optgroup label="Especial">
-                                <option value="ELECTIVO">ELECTIVO</option>
-                                <option value="Reemplazo">Reemplazo</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div class="col-md-6"><label class="fw-bold small text-muted">ASIGNATURA</label><input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()" required></div>
-                    <div class="col-12">
-                        <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
-                        <div class="d-flex gap-2 align-items-center">
-                            <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
-                                <option value="">Seleccione un docente...</option>
-                            </select>
-                            <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
-                        </div>
-                    </div>
-                    <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()" value="0" min="0"></div>
-                    <div class="col-md-4">
-                        <label class="fw-bold small text-danger">REEMPLAZOS</label>
-                        <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(); toggleNroEquipo()" value="0" min="0">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="fw-bold small text-success">DEVUELTOS</label>
-                        <input type="number" id="fDev" class="form-control" oninput="validateCounts()" value="0" min="0">
-                        <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
-                        <small id="valMsgStock" class="text-warning fw-bold" style="display:none; background:#fff3cd; padding:2px 8px; border-radius:4px;"></small>
-                    </div>
-                    <!-- N° Equipo de Reemplazo -->
-                    <div class="col-12" id="nroEquipoWrapper" style="display:none;">
-                        <div class="p-3 rounded-3" style="background:#fff5f5; border:1.5px solid #dc3545;">
-                            <label class="fw-bold small text-danger d-block mb-2">🔴 EQUIPO DE REEMPLAZO ASIGNADO</label>
-                            <div class="d-flex gap-2 flex-wrap" id="equipoReemplazoOpciones">
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq1" value="Equipo 1" onchange="saveDraft()">
-                                    <label class="form-check-label fw-bold" for="eq1" style="color:#b71c1c;">📦 Equipo 1</label>
+                <form id="resForm" class="needs-validation" novalidate>
+                    <input type="hidden" id="fId">
+                    <input type="hidden" id="fEstado">
+                    <input type="hidden" id="fFechaCierre">
+                    <input type="hidden" id="fRespCierre">
+                    <input type="hidden" id="fLabHidden">
+
+                    <!-- ══ PASO 1: Datos Básicos ══ -->
+                    <div class="wizard-panel active" id="wpanel1">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="fw-bold small text-muted">FECHA</label>
+                                <input type="date" id="fFecha" class="form-control" onchange="saveDraft()" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold small text-muted">HORA DE AGENDA</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-0"><small>🕐</small></span>
+                                    <input type="time" id="fHora" class="form-control" oninput="saveDraft()" required>
                                 </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq2" value="Equipo 2" onchange="saveDraft()">
-                                    <label class="form-check-label fw-bold" for="eq2" style="color:#b71c1c;">📦 Equipo 2</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq3" value="Equipo 3" onchange="saveDraft()">
-                                    <label class="form-check-label fw-bold" for="eq3" style="color:#b71c1c;">📦 Equipo 3</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="fNroEquipo" id="eq4" value="Equipo 4" onchange="saveDraft()">
-                                    <label class="form-check-label fw-bold" for="eq4" style="color:#b71c1c;">📦 Equipo 4</label>
+                                <small class="text-muted" style="font-size:0.7rem;">Ingrese la hora (ej: 08:10)</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold small text-muted">CURSO</label>
+                                <select id="fCurso" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
+                                    <option value="">Seleccione curso...</option>
+                                    <optgroup label="Básica">
+                                        <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                        <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                        <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                        <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                        <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                        <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                        <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                        <option value="8° A">8° A</option><option value="8° B">8° B</option>
+                                    </optgroup>
+                                    <optgroup label="Media">
+                                        <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                        <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                        <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                        <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
+                                    </optgroup>
+                                    <optgroup label="Especial">
+                                        <option value="ELECTIVO">ELECTIVO</option>
+                                        <option value="Reemplazo">Reemplazo</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold small text-muted">ASIGNATURA</label>
+                                <input type="text" id="fAsignatura" class="form-control" placeholder="Ej: Matemática" oninput="saveDraft()" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="fw-bold small text-muted">PROFESOR RESPONSABLE</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
+                                        <option value="">Seleccione un docente...</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
                                 </div>
                             </div>
-                            <small class="text-muted mt-1 d-block" style="font-size:0.7rem;">Selecciona el equipo de reemplazo que se entregó al docente</small>
-                        </div>
-                    </div>
-                    <!-- Estado de Devolución -->
-                    <div class="col-12">
-                        <div class="p-3 rounded-3" style="background:#f0f9ff; border:1.5px solid #0288d1;">
-                            <label class="fw-bold small d-block mb-2" style="color:#0277bd; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.5px;">📋 ESTADO DE LA DEVOLUCIÓN</label>
-                            <div class="d-flex gap-2 flex-wrap" id="estadoDevWrapper">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edOk" value="ok" onchange="onEstadoDevChange()">
-                                    <label class="form-check-label fw-bold text-success" for="edOk">✅ Sin novedad</label>
+                            <div class="col-12">
+                                <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#f3f0ff; border:1.5px solid #6f42c1;">
+                                    <div>
+                                        <div class="fw-bold" style="color:#6f42c1;font-size:0.95rem;">🟣 USO DE LABORATORIO</div>
+                                        <div class="text-muted" style="font-size:0.78rem;">Marcar si la clase se realizó en el laboratorio</div>
+                                    </div>
+                                    <div class="form-check form-switch mb-0 ms-3">
+                                        <input class="form-check-input" type="checkbox" id="fLab" role="switch"
+                                               style="width:3em;height:1.6em;cursor:pointer;accent-color:#6f42c1;"
+                                               onchange="saveDraft()">
+                                    </div>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edPendiente" value="pendiente" onchange="onEstadoDevChange()">
-                                    <label class="form-check-label fw-bold text-warning" for="edPendiente">⏳ Pendiente</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="fEstadoDev" id="edDanio" value="danio" onchange="onEstadoDevChange()">
-                                    <label class="form-check-label fw-bold text-danger" for="edDanio">🔴 Con daño</label>
-                                </div>
-                            </div>
-                            <!-- Campo tipo de daño (visible solo si se marca "Con daño") -->
-                            <div id="tipoDanioWrapper" style="display:none; margin-top:10px;">
-                                <label class="fw-bold small text-danger mb-1 d-block">TIPO DE DAÑO</label>
-                                <input type="text" id="fTipoDanio" class="form-control border-danger" 
-                                       placeholder="Describe el daño (ej: pantalla rayada, tecla rota...)" 
-                                       oninput="saveDraft()">
-                                <small class="text-muted" style="font-size:0.7rem;">Ingrese el tipo de daño manualmente</small>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <div class="d-flex align-items-center justify-content-between p-3 rounded-3" style="background:#f3f0ff; border: 1.5px solid #6f42c1;">
-                            <div>
-                                <div class="fw-bold" style="color:#6f42c1; font-size:0.95rem;">🟣 USO DE LABORATORIO</div>
-                                <div class="text-muted" style="font-size:0.78rem;">Marcar si la clase se realizó en el laboratorio de computación</div>
+
+                    <!-- ══ PASO 2: Equipos ══ -->
+                    <div class="wizard-panel" id="wpanel2">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="fw-bold small text-primary">CHROMEBOOKS</label>
+                                <input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()" value="0" min="0">
                             </div>
-                            <div class="form-check form-switch mb-0 ms-3">
-                                <input class="form-check-input" type="checkbox" id="fLab" role="switch" 
-                                       style="width:3em; height:1.6em; cursor:pointer; accent-color:#6f42c1;"
-                                       onchange="saveDraft()">
+                            <div class="col-md-4">
+                                <label class="fw-bold small text-danger">REEMPLAZOS</label>
+                                <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(); toggleNroEquipo()" value="0" min="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold small text-success">DEVUELTOS</label>
+                                <input type="number" id="fDev" class="form-control" oninput="validateCounts()" value="0" min="0">
+                                <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
+                                <small id="valMsgStock" class="text-warning fw-bold" style="display:none;background:#fff3cd;padding:2px 8px;border-radius:4px;"></small>
+                            </div>
+                            <!-- N° Equipo de Reemplazo -->
+                            <div class="col-12" id="nroEquipoWrapper" style="display:none;">
+                                <div class="p-3 rounded-3" style="background:#fff5f5;border:1.5px solid #dc3545;">
+                                    <label class="fw-bold small text-danger d-block mb-2">🔴 EQUIPO DE REEMPLAZO ASIGNADO</label>
+                                    <div class="d-flex gap-2 flex-wrap" id="equipoReemplazoOpciones">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="fNroEquipo" id="eq1" value="Equipo 1" onchange="saveDraft()">
+                                            <label class="form-check-label fw-bold" for="eq1" style="color:#b71c1c;">📦 Equipo 1</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="fNroEquipo" id="eq2" value="Equipo 2" onchange="saveDraft()">
+                                            <label class="form-check-label fw-bold" for="eq2" style="color:#b71c1c;">📦 Equipo 2</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="fNroEquipo" id="eq3" value="Equipo 3" onchange="saveDraft()">
+                                            <label class="form-check-label fw-bold" for="eq3" style="color:#b71c1c;">📦 Equipo 3</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="fNroEquipo" id="eq4" value="Equipo 4" onchange="saveDraft()">
+                                            <label class="form-check-label fw-bold" for="eq4" style="color:#b71c1c;">📦 Equipo 4</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Estado de Devolución -->
+                            <div class="col-12">
+                                <div class="p-3 rounded-3" style="background:#f0f9ff;border:1.5px solid #0288d1;">
+                                    <label class="fw-bold small d-block mb-2" style="color:#0277bd;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.5px;">📋 ESTADO DE LA DEVOLUCIÓN</label>
+                                    <div class="d-flex gap-2 flex-wrap" id="estadoDevWrapper">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="fEstadoDev" id="edOk" value="ok" onchange="onEstadoDevChange()">
+                                            <label class="form-check-label fw-bold text-success" for="edOk">✅ Sin novedad</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="fEstadoDev" id="edPendiente" value="pendiente" onchange="onEstadoDevChange()">
+                                            <label class="form-check-label fw-bold text-warning" for="edPendiente">⏳ Pendiente</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="fEstadoDev" id="edDanio" value="danio" onchange="onEstadoDevChange()">
+                                            <label class="form-check-label fw-bold text-danger" for="edDanio">🔴 Con daño</label>
+                                        </div>
+                                    </div>
+                                    <div id="tipoDanioWrapper" style="display:none;margin-top:10px;">
+                                        <label class="fw-bold small text-danger mb-1 d-block">TIPO DE DAÑO</label>
+                                        <input type="text" id="fTipoDanio" class="form-control border-danger"
+                                               placeholder="Describe el daño (ej: pantalla rayada, tecla rota...)"
+                                               oninput="saveDraft()">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Observación -->
+                            <div class="col-12" id="obsSelectWrapper">
+                                <label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
+                                <div id="obsNuevaReservaInfo" class="d-flex align-items-center gap-2 p-2 rounded-2" style="background:#eceff1;border:1.5px solid #b0bec5;">
+                                    <span style="font-size:1.1rem;">🕐</span>
+                                    <div>
+                                        <div style="font-size:0.82rem;font-weight:700;color:#546e7a;">Se registrará como <b>"Pendiente"</b> automáticamente</div>
+                                        <div style="font-size:0.7rem;color:#90a4ae;">Podrás editarla una vez que el docente devuelva los equipos</div>
+                                    </div>
+                                </div>
+                                <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()" style="display:none;">
+                                    <option value="Sin novedad">✅ Sin novedad</option>
+                                    <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
+                                    <option value="Teclado Falla">🟠 Teclado Falla</option>
+                                    <option value="No Enciende">⚫ No Enciende</option>
+                                </select>
+                            </div>
+                            <div class="col-12" id="obsEditWrapper" style="display:none;">
+                                <label class="fw-bold small text-muted d-flex align-items-center gap-2">
+                                    OBSERVACIÓN TÉCNICO
+                                    <span class="badge bg-success" style="font-size:0.65rem;">✏️ EDITABLE – Equipos devueltos</span>
+                                </label>
+                                <textarea id="fObsEdit" class="form-control border-success shadow-sm" rows="2"
+                                          placeholder="Ingrese observación del técnico tras la devolución..."
+                                          oninput="saveDraft()" style="resize:none;font-size:0.9rem;"></textarea>
+                                <small class="text-success fw-bold" style="font-size:0.7rem;">🔓 Editable porque los equipos ya fueron devueltos</small>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12" id="obsSelectWrapper"><label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
-                        <div id="obsNuevaReservaInfo" class="d-flex align-items-center gap-2 p-2 rounded-2" style="background:#eceff1; border:1.5px solid #b0bec5;">
-                            <span style="font-size:1.1rem;">🕐</span>
-                            <div>
-                                <div style="font-size:0.82rem; font-weight:700; color:#546e7a;">Se registrará como <b>"Pendiente"</b> automáticamente</div>
-                                <div style="font-size:0.7rem; color:#90a4ae;">Podrás editarla una vez que el docente devuelva los equipos</div>
-                            </div>
+
+                    <!-- ══ PASO 3: Confirmación ══ -->
+                    <div class="wizard-panel" id="wpanel3">
+                        <div class="confirm-card">
+                            <h6>📅 Datos de la Clase</h6>
+                            <div class="confirm-row"><span class="clabel">Fecha</span><span class="cval" id="cv-fecha">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Hora</span><span class="cval" id="cv-hora">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Curso</span><span class="cval" id="cv-curso">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Asignatura</span><span class="cval" id="cv-asig">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Profesor</span><span class="cval" id="cv-prof">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Laboratorio</span><span class="cval" id="cv-lab">No</span></div>
                         </div>
-                        <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()" style="display:none;">
-                            <option value="Sin novedad">✅ Sin novedad</option>
-                            <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
-                            <option value="Teclado Falla">🟠 Teclado Falla</option>
-                            <option value="No Enciende">⚫ No Enciende</option>
-                        </select>
-                    </div>
-                    <div class="col-12" id="obsEditWrapper" style="display:none;">
-                        <label class="fw-bold small text-muted d-flex align-items-center gap-2">
-                            OBSERVACIÓN TÉCNICO 
-                            <span class="badge bg-success" style="font-size:0.65rem;">✏️ EDITABLE – Equipos devueltos</span>
-                        </label>
-                        <textarea id="fObsEdit" class="form-control border-success shadow-sm" rows="2" 
-                                  placeholder="Ingrese observación del técnico tras la devolución..." 
-                                  oninput="saveDraft()" style="resize:none; font-size:0.9rem;"></textarea>
-                        <small class="text-success fw-bold" style="font-size:0.7rem;">🔓 Este campo es editable porque los equipos ya fueron devueltos</small>
+                        <div class="confirm-card" style="background:#fffdf5;border-color:#ffe082;">
+                            <h6 style="color:#e65100;">📦 Equipos</h6>
+                            <div class="confirm-row"><span class="clabel">Chromebooks</span><span class="cval" id="cv-chr">0</span></div>
+                            <div class="confirm-row"><span class="clabel">Reemplazos</span><span class="cval" id="cv-ree">0</span></div>
+                            <div class="confirm-row"><span class="clabel">Devueltos</span><span class="cval" id="cv-dev">0</span></div>
+                            <div class="confirm-row"><span class="clabel">Equipo reemplazo</span><span class="cval" id="cv-nroeq">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Estado devolución</span><span class="cval" id="cv-estado">—</span></div>
+                        </div>
+                        <div class="p-3 rounded-3 text-center" style="background:#f0fff4;border:1.5px solid #81c784;">
+                            <div style="font-size:0.8rem;color:#2e7d32;font-weight:700;">✅ Todo listo para guardar en Google Sheets</div>
+                        </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer p-3 bg-light"><button class="btn btn-success w-100 py-3 fw-bold shadow" onclick="saveData()">GUARDAR CAMBIOS EN GOOGLE SHEETS</button></div>
+
+            <!-- NAVEGACIÓN DEL WIZARD -->
+            <div class="wizard-nav">
+                <button class="btn btn-outline-secondary fw-bold px-4" id="wBtnPrev" onclick="wizardPrev()" style="display:none;">← Anterior</button>
+                <div class="flex-grow-1"></div>
+                <button class="btn btn-success fw-bold px-4" id="wBtnNext" onclick="wizardNext()">Siguiente →</button>
+                <button class="btn btn-success fw-bold px-5 shadow" id="wBtnSave" onclick="saveData()" style="display:none;">💾 GUARDAR EN SHEETS</button>
+            </div>
         </div></div>
     </div>
 
     <footer class="footer">
         © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Creado Por: <b>Franco San Martín</b>.
-    </footer>
 
     <script src="scripts.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
