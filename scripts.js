@@ -243,7 +243,7 @@ function renderAll() {
     updateCharts(baseFiltered); 
 }
 
-// 3. KPIs - siempre sobre el mes completo, KPI semana sigue el tab activo
+// 3. KPIs con tendencias y mini-barras
 function updateKPIs(base) {
     function animateKPI(id, val) {
         const el = document.getElementById(id);
@@ -253,21 +253,72 @@ function updateKPIs(base) {
         setTimeout(() => { el.innerText = val; el.style.opacity = '1'; }, 200);
     }
 
-    // Mes completo independiente del tab de semana activo
+    function setTrend(id, curr, prev, invertido) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        if(prev === 0 && curr === 0) { el.className='kpi-trend neu'; el.textContent='sin datos previos'; return; }
+        if(prev === 0) { el.className='kpi-trend neu'; el.textContent='primer mes'; return; }
+        const diff = curr - prev;
+        const pct = Math.round(Math.abs(diff / prev) * 100);
+        if(diff === 0) { el.className='kpi-trend neu'; el.textContent='igual que mes anterior'; return; }
+        const sube = diff > 0;
+        const bueno = invertido ? !sube : sube;
+        el.className = 'kpi-trend ' + (bueno ? 'up' : 'down');
+        el.textContent = (sube ? '▲ ' : '▼ ') + pct + '% vs mes anterior';
+    }
+
+    function setBar(id, val, max, color) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        const pct = max > 0 ? Math.min(100, Math.round((val/max)*100)) : 0;
+        el.style.width = pct + '%';
+        el.style.background = color;
+    }
+
     const mesCompleto = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
         return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
+
+    const mAntDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+    const mesAnterior = db.filter(d => {
+        const date = new Date(d.fecha + "T00:00:00");
+        return date.getMonth() === mAntDate.getMonth() && date.getFullYear() === mAntDate.getFullYear();
+    });
+
     const labMes   = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
     const reempMes = mesCompleto.filter(d => parseInt(d.reemplazo || 0) > 0).length;
     const okMes    = mesCompleto.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
     const dmgMes   = mesCompleto.filter(d => d.observacion.toLowerCase().includes("dañ")).length;
+    const tasaOk   = mesCompleto.length > 0 ? Math.round((okMes / mesCompleto.length) * 100) : 0;
+
+    const labAnt    = mesAnterior.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
+    const reempAnt  = mesAnterior.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+    const okAnt     = mesAnterior.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+    const dmgAnt    = mesAnterior.filter(d => d.observacion.toLowerCase().includes("dañ")).length;
+    const tasaOkAnt = mesAnterior.length > 0 ? Math.round((okAnt / mesAnterior.length) * 100) : 0;
 
     animateKPI('kpi-total',   mesCompleto.length);
     animateKPI('kpi-lab',     labMes);
     animateKPI('kpi-reemp',   reempMes);
     animateKPI('kpi-damaged', dmgMes);
-    animateKPI('kpi-ok', mesCompleto.length > 0 ? Math.round((okMes / mesCompleto.length) * 100) + "%" : "0%");
+    animateKPI('kpi-ok',      tasaOk + "%");
+
+    setTrend('kpi-total-trend',   mesCompleto.length, mesAnterior.length, false);
+    setTrend('kpi-lab-trend',     labMes,   labAnt,    false);
+    setTrend('kpi-reemp-trend',   reempMes, reempAnt,  false);
+    setTrend('kpi-damaged-trend', dmgMes,   dmgAnt,    true);
+    setTrend('kpi-ok-trend',      tasaOk,   tasaOkAnt, false);
+
+    const maxRef = Math.max(mesCompleto.length, 1);
+    setBar('kpi-total-bar',   mesCompleto.length, maxRef, '#107c41');
+    setBar('kpi-lab-bar',     labMes,   maxRef, '#6f42c1');
+    setBar('kpi-reemp-bar',   reempMes, maxRef, '#dc3545');
+    setBar('kpi-damaged-bar', dmgMes,   maxRef, '#d32f2f');
+    setBar('kpi-ok-bar',      tasaOk,   100,    '#198754');
+
+    // Panel de alertas pendientes
+    renderAlertasPanel(mesCompleto);
 
     // KPI semana: sigue exactamente el tab activo
     let prestSemana, labelSemTxt;
@@ -559,6 +610,7 @@ function openModal() {
     if(document.getElementById('fTipoDanio')) document.getElementById('fTipoDanio').value = '';
     loadDraft(); 
     fillDocentes();
+    wizardGoTo(1);
     new bootstrap.Modal(document.getElementById('resModal')).show(); 
 }
 
@@ -719,6 +771,7 @@ function editItem(id) {
     }
 
     validateCounts();
+    wizardGoTo(2); // En edición, saltar directo a equipos
     new bootstrap.Modal(document.getElementById('resModal')).show();
 }
 
@@ -1344,6 +1397,126 @@ function verResumenProfesor(nombre) {
         width: 520,
         customClass: { popup: 'shadow-lg' }
     });
+}
+
+
+// ── PANEL DE ALERTAS PENDIENTES ──────────────────────────────────────────
+function renderAlertasPanel(mesCompleto) {
+    const wrapper = document.getElementById('alertasPanelWrapper');
+    const body    = document.getElementById('alertasBody');
+    const badge   = document.getElementById('alertasCount');
+    if(!wrapper || !body) return;
+
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+    // Registros pendientes: más salidas que devoluciones y no dañados
+    const pendientes = mesCompleto.filter(d => {
+        const total = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        const dev   = parseInt(d.devueltos||0);
+        const isDmg = d.observacion.toLowerCase().includes("dañ");
+        return total > dev && !isDmg;
+    });
+
+    if(pendientes.length === 0) {
+        wrapper.style.display = 'none';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    if(badge) badge.textContent = pendientes.length;
+
+    // Ordenar por fecha más antigua primero (más días de deuda)
+    const sorted = [...pendientes].sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+
+    body.innerHTML = sorted.map(d => {
+        const fechaD = new Date(d.fecha + "T00:00:00");
+        const diffMs = hoy - fechaD;
+        const dias   = Math.floor(diffMs / (1000*60*60*24));
+        const total  = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        const dev    = parseInt(d.devueltos||0);
+        const falta  = total - dev;
+        const fechaFmt = d.fecha.split('-').reverse().slice(0,2).join('/');
+
+        let diasClass = 'alerta-dias';
+        let diasLabel = '';
+        if(dias === 0) { diasClass += ' hoy'; diasLabel = 'HOY'; }
+        else if(dias <= 2) { diasClass += ' reciente'; diasLabel = dias + 'd'; }
+        else diasLabel = dias + 'd';
+
+        const reeLabel = parseInt(d.reemplazo||0) > 0
+            ? ` · 🔴 ${d.nro_equipo_reemplazo || 'reemplazo'}` : '';
+
+        return `<div class="alerta-item" onclick="editItem('${d.id}')">
+            <div class="${diasClass}"><div>${diasLabel}</div><div style="font-size:0.55rem;opacity:0.8;">${dias === 0 ? '' : 'atrás'}</div></div>
+            <div class="alerta-info">
+                <div class="alerta-nombre">👤 ${d.profesor}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">${falta} equipo${falta!==1?'s':''} sin devolver</b>${reeLabel}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;padding:3px 8px;">Editar</button>
+        </div>`;
+    }).join('');
+}
+
+// ── WIZARD DE PASOS ───────────────────────────────────────────────────────
+let _wizardStep = 1;
+const WIZARD_TOTAL = 3;
+
+function wizardGoTo(step) {
+    _wizardStep = step;
+    for(let i = 1; i <= WIZARD_TOTAL; i++) {
+        const panel = document.getElementById('wpanel' + i);
+        const dot   = document.getElementById('wstep' + i);
+        if(panel) panel.classList.toggle('active', i === step);
+        if(dot) {
+            dot.classList.remove('active','done');
+            if(i === step)   dot.classList.add('active');
+            if(i < step)     dot.classList.add('done');
+        }
+    }
+    const prev = document.getElementById('wBtnPrev');
+    const next = document.getElementById('wBtnNext');
+    const save = document.getElementById('wBtnSave');
+    if(prev) prev.style.display = step > 1 ? 'inline-block' : 'none';
+    if(next) next.style.display = step < WIZARD_TOTAL ? 'inline-block' : 'none';
+    if(save) save.style.display = step === WIZARD_TOTAL ? 'inline-block' : 'none';
+}
+
+function wizardNext() {
+    // Validar paso 1 antes de avanzar
+    if(_wizardStep === 1) {
+        const fecha = document.getElementById('fFecha').value;
+        const hora  = document.getElementById('fHora').value;
+        const curso = document.getElementById('fCurso').value;
+        const asig  = document.getElementById('fAsignatura').value;
+        const prof  = document.getElementById('fProfesor').value;
+        if(!fecha || !hora || !curso || !asig || !prof) {
+            Swal.fire({ icon:'warning', title:'Campos incompletos', text:'Por favor complete Fecha, Hora, Curso, Asignatura y Profesor antes de continuar.', confirmButtonColor:'#0d6832' });
+            return;
+        }
+    }
+    if(_wizardStep === WIZARD_TOTAL - 1) {
+        // Llenar resumen en paso 3
+        const estadoMap = { ok:'✅ Sin novedad', pendiente:'⏳ Pendiente', danio:'🔴 Con daño', '':'—' };
+        const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+        const nroEq     = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '—';
+        const labCheck  = document.getElementById('fLab')?.checked;
+        document.getElementById('cv-fecha').textContent = document.getElementById('fFecha').value || '—';
+        document.getElementById('cv-hora').textContent  = document.getElementById('fHora').value  || '—';
+        document.getElementById('cv-curso').textContent = document.getElementById('fCurso').value || '—';
+        document.getElementById('cv-asig').textContent  = document.getElementById('fAsignatura').value || '—';
+        document.getElementById('cv-prof').textContent  = document.getElementById('fProfesor').value || '—';
+        document.getElementById('cv-lab').textContent   = labCheck ? '🟣 Sí' : 'No';
+        document.getElementById('cv-chr').textContent   = document.getElementById('fChr').value || '0';
+        document.getElementById('cv-ree').textContent   = document.getElementById('fRee').value || '0';
+        document.getElementById('cv-dev').textContent   = document.getElementById('fDev').value || '0';
+        document.getElementById('cv-nroeq').textContent = nroEq;
+        document.getElementById('cv-estado').textContent = estadoMap[estadoDev] || '—';
+    }
+    if(_wizardStep < WIZARD_TOTAL) wizardGoTo(_wizardStep + 1);
+}
+
+function wizardPrev() {
+    if(_wizardStep > 1) wizardGoTo(_wizardStep - 1);
 }
 
 window.onload = load;
