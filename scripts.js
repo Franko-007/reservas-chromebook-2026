@@ -6,7 +6,7 @@ function getEstado(r) {
 
     // Laboratorio: campo dedicado o legado en observacion
     if (r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" || obs.includes("laboratorio")) return "LABORATORIO";
-    if (obs.includes("dañada") || obs.includes("dañado")) return "DAÑADO";
+    if (obs.includes("dañ")) return "DAÑADO";
     if ((chr + ree) > dev) return "ACTIVO";
     return "CERRADO";
 }
@@ -14,7 +14,7 @@ function getEstado(r) {
 function calcEstado(chr,ree,dev,obs,lab){
  obs=(obs||"").toLowerCase();
  if(lab) return "LABORATORIO";
- if(obs.includes("dañada")||obs.includes("dañado")) return "DAÑADO";
+ if(obs.includes("dañ")) return "DAÑADO";
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
 }
@@ -125,7 +125,7 @@ function renderAll() {
 
         const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
         const isDebt = totalOut > parseInt(d.devueltos || 0);
-        const isDamaged = d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado");
+        const isDamaged = d.observacion.toLowerCase().includes("dañ");
         const isLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
                    || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
 
@@ -167,7 +167,7 @@ function renderAll() {
         sorted.forEach(r => {
             const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
             const isOK = totalOut === parseInt(r.devueltos);
-            const isDamaged = r.observacion.toLowerCase().includes("dañada") || r.observacion.toLowerCase().includes("dañado");
+            const isDamaged = r.observacion.toLowerCase().includes("dañ");
             const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true"
                        || (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
 
@@ -230,7 +230,7 @@ function renderAll() {
     }
 
     // Banner de deudas
-    const currentDebts = baseFiltered.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !d.observacion.toLowerCase().includes("dañada"));
+    const currentDebts = baseFiltered.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !d.observacion.toLowerCase().includes("dañ"));
     const banner = document.getElementById('debtBanner');
     if(banner) {
         if(currentDebts.length > 0) {
@@ -261,7 +261,7 @@ function updateKPIs(base) {
     const labMes   = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
     const reempMes = mesCompleto.filter(d => parseInt(d.reemplazo || 0) > 0).length;
     const okMes    = mesCompleto.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const dmgMes   = mesCompleto.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
+    const dmgMes   = mesCompleto.filter(d => d.observacion.toLowerCase().includes("dañ")).length;
 
     animateKPI('kpi-total',   mesCompleto.length);
     animateKPI('kpi-lab',     labMes);
@@ -451,7 +451,7 @@ function renderAnualChart() {
             const m = dt.getMonth();
             usageTotal[m]++;
             if(parseInt(d.reemplazo || 0) > 0) replacements[m]++;
-            if(d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")) damaged[m]++;
+            if(d.observacion.toLowerCase().includes("dañ")) damaged[m]++;
             const esLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true"
                           || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
             if(esLab) labs[m]++;
@@ -1283,7 +1283,7 @@ function verResumenProfesor(nombre) {
     const total = registros.length;
     const ok = registros.filter(d => (parseInt(d.chromebooks)+parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
     const pendientes = registros.filter(d => (parseInt(d.chromebooks||0)+parseInt(d.reemplazo||0)) > parseInt(d.devueltos||0) && !d.observacion.toLowerCase().includes("dañ")).length;
-    const dañados = registros.filter(d => d.observacion.toLowerCase().includes("dañada") || d.observacion.toLowerCase().includes("dañado")).length;
+    const dañados = registros.filter(d => d.observacion.toLowerCase().includes("dañ")).length;
     const labs = registros.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
     const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
     const totalChr = registros.reduce((s,d) => s + parseInt(d.chromebooks||0), 0);
