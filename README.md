@@ -1,1 +1,0 @@
-# reservas-chromebook-2026
