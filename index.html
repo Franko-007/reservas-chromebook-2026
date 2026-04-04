@@ -254,6 +254,7 @@
                             </optgroup>
                             <optgroup label="Especial">
                                 <option value="ELECTIVO">ELECTIVO</option>
+                                <option value="Reemplazo">Reemplazo</option>
                             </optgroup>
                         </select>
                     </div>
@@ -267,10 +268,10 @@
                             <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
                         </div>
                     </div>
-                    <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts(true)" value="0" min="0"></div>
+                    <div class="col-md-4"><label class="fw-bold small text-primary">CHROMEBOOKS</label><input type="number" id="fChr" class="form-control bg-light" oninput="validateCounts()" value="0" min="0"></div>
                     <div class="col-md-4">
                         <label class="fw-bold small text-danger">REEMPLAZOS</label>
-                        <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(true); toggleNroEquipo()" value="0" min="0">
+                        <input type="number" id="fRee" class="form-control bg-light" oninput="validateCounts(); toggleNroEquipo()" value="0" min="0">
                     </div>
                     <div class="col-md-4">
                         <label class="fw-bold small text-success">DEVUELTOS</label>
@@ -376,7 +377,7 @@
     </div>
 
     <footer class="footer">
-        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Responsable Técnico: Franco San Martín
+        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Creado Por: <b>Franco San Martín</b>.
     </footer>
 
     <script src="scripts.js"></script>
