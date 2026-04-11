@@ -18,7 +18,7 @@ function calcEstado(chr,ree,dev,obs,lab){
  if((parseInt(chr||0)+parseInt(ree||0))>parseInt(dev||0)) return "ACTIVO";
  return "CERRADO";
 }
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwHI_6GzuaT1BoJWhoMh-6YF_08AsLksgmGO9ImkDTmpKB9nT2SkRZaz0mKPIyGB8k/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxN2XQAMGfzqDHYkAdfdPrkQ6d6Mni72WRZajuQyyewjDhVAdemvVuUrN0SUY54x_o/exec";
 // Inicializar con la fecha actual
 const _hoy = new Date();
 const _diaHoy = _hoy.getDate();
@@ -183,11 +183,11 @@ function renderAll() {
                     ? `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>`
                     : '';
                 rows.push(`<tr class="day-separator-row">
-                    <td colspan="10" style="background:linear-gradient(90deg,#e0f4f1,#f0faf8,#e8f6f3);border-left:5px solid #00897b;border-top:1px solid #b2dfdb;border-bottom:1px solid #b2dfdb;padding:8px 16px;font-size:0.78rem;font-weight:800;color:#00695c;letter-spacing:0.8px;text-transform:uppercase;">
+                    <td colspan="10" style="background:#4a4a4a;border-left:5px solid #222;border-top:1px solid #333;border-bottom:1px solid #333;padding:8px 16px;font-size:0.78rem;font-weight:800;color:#f0f0f0;letter-spacing:0.8px;text-transform:uppercase;">
                         <span style="display:inline-flex;align-items:center;gap:8px;">
-                            <span style="background:#00897b;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;">📅 ${diaNombre}</span>
-                            <span style="color:#00897b;font-weight:900;">${fechaFmt}</span>
-                            <span style="background:#e0f2f1;color:#00695c;border:1px solid #80cbc4;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
+                            <span style="background:#222;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;">📅 ${diaNombre}</span>
+                            <span style="color:#f0f0f0;font-weight:900;">${fechaFmt}</span>
+                            <span style="background:#666;color:#f0f0f0;border:1px solid #555;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
                             ${labBadge}
                         </span>
                     </td>
@@ -211,7 +211,7 @@ function renderAll() {
                 <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
                 <td>${r.curso}</td>
                 <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
-                <td class="text-start fw-bold" style="color:#2b5797;cursor:pointer;text-decoration:underline dotted;" onclick="verResumenProfesor('${r.profesor}')" title="Ver resumen de ${r.profesor}">${r.profesor}</td>
+                <td class="text-start fw-bold" style="color:#333;">${r.profesor}</td>
                 <td>${r.chromebooks}</td>
                 <td class="text-danger fw-bold">${r.reemplazo}</td>
                 <td class="text-success fw-bold">${r.devueltos}</td>
@@ -253,18 +253,17 @@ function updateKPIs(base) {
         setTimeout(() => { el.innerText = val; el.style.opacity = '1'; }, 200);
     }
 
-    function setTrend(id, curr, prev, invertido) {
+    function setTrend(id, curr, prev, invertido, unit) {
         const el = document.getElementById(id);
         if(!el) return;
         if(prev === 0 && curr === 0) { el.className='kpi-trend neu'; el.textContent='sin datos previos'; return; }
         if(prev === 0) { el.className='kpi-trend neu'; el.textContent='primer mes'; return; }
         const diff = curr - prev;
-        const pct = Math.round(Math.abs(diff / prev) * 100);
-        if(diff === 0) { el.className='kpi-trend neu'; el.textContent='igual que mes anterior'; return; }
+        if(diff === 0) { el.className='kpi-trend neu'; el.textContent='sin cambio'; return; }
         const sube = diff > 0;
         const bueno = invertido ? !sube : sube;
         el.className = 'kpi-trend ' + (bueno ? 'up' : 'down');
-        el.textContent = (sube ? '▲ ' : '▼ ') + pct + '% vs mes anterior';
+        el.textContent = (sube ? '▲ ' : '▼ ') + Math.abs(diff) + (unit||'') + ' vs mes ant.';
     }
 
     function setBar(id, val, max, color) {
@@ -304,11 +303,7 @@ function updateKPIs(base) {
     animateKPI('kpi-damaged', dmgMes);
     animateKPI('kpi-ok',      tasaOk + "%");
 
-    setTrend('kpi-total-trend',   mesCompleto.length, mesAnterior.length, false);
-    setTrend('kpi-lab-trend',     labMes,   labAnt,    false);
-    setTrend('kpi-reemp-trend',   reempMes, reempAnt,  false);
-    setTrend('kpi-damaged-trend', dmgMes,   dmgAnt,    true);
-    setTrend('kpi-ok-trend',      tasaOk,   tasaOkAnt, false);
+
 
     const maxRef = Math.max(mesCompleto.length, 1);
     setBar('kpi-total-bar',   mesCompleto.length, maxRef, '#107c41');
