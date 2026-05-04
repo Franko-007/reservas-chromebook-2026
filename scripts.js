@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN ====================
 // IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwRFFxB89o76yihPMF2DKalA_RBoIZfAiNO8NPYKiKE23fcMz0aHuDEmf1J8wKYOWk/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyeh6L04JeRiFeTotFZnZuQ_KNwYoB8zmpe-dXJdptZKdeKHRpJHe2-a9erVHWGWV4/exec";
 
 const STOCK_MAXIMO = 115;
 const STOCK_REEMPLAZO = 4;
@@ -96,36 +96,59 @@ async function load() {
 
     try {
         const response = await fetch(SCRIPT_URL);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        // Verificar si la respuesta es exitosa
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
 
         if (data.status === 'success') {
             db = data.data;
-            console.log('✅ Datos cargados:', db.length, 'registros');
+            console.log('✅ Datos cargrados:', db.length, 'registros');
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Datos sincronizados',
+                text: `Se cargaron ${db.length} registros correctamente`,
+                timer: 2000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
         } else {
             throw new Error(data.message || 'Error al cargar datos');
         }
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Datos sincronizados',
-            text: `Se cargaron ${db.length} registros correctamente`,
-            timer: 2000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        });
 
         renderAll();
         renderAnualChart();
     } catch (error) {
         console.error('❌ Error detallado:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error de Conexión',
-            text: 'No se pudieron cargar los datos de Google Sheets. Verifica que el script esté publicado correctamente.',
-            footer: '<a href="#" onclick="location.reload()">Intentar de nuevo</a>'
-        });
+        
+        // Verificar si es un error de CORS específicamente
+        if (error.message.includes('FETCH_ERROR') || error.message.includes('CORS')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Conexión',
+                html: 'No se pudieron cargar los datos debido a restricciones de CORS.<br><br>' +
+                      '<b>Solución:</b><br>' +
+                      '1. Abre Google Apps Script<br>' +
+                      '2. Ve a "Publicar" > "Implementar como aplicación web"<br>' +
+                      '3. Asegúrate de que "Quién tiene acceso" sea "Cualquier persona" o "Cualquier persona con el enlace"<br>' +
+                      '4. Copia la NUEVA URL generada y actualiza SCRIPT_URL<br>' +
+                      '5. En el código.gs, asegúrate de tener:<br>' +
+                      '<code style="font-size:11px;">return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);</code>',
+                confirmButtonText: 'Entendido'
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Conexión',
+                text: 'No se pudieron cargar los datos de Google Sheets. Verifica que el script esté publicado correctamente.',
+                footer: '<a href="#" onclick="location.reload()">Intentar de nuevo</a>'
+            });
+        }
     } finally {
         if (loadingEl) loadingEl.style.display = 'none';
     }
@@ -142,7 +165,7 @@ function renderAll() {
 
     const baseFiltered = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+        return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
     const finalFiltered = baseFiltered.filter(d => {
@@ -292,7 +315,7 @@ function updateKPIs(base) {
 
     const mesCompleto = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+        return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
     const labMes = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
@@ -463,7 +486,7 @@ function renderAnualChart() {
 
     db.forEach(d => {
         const dt = new Date(d.fecha + "T00:00:00");
-        if (dt.getFullYear() === 2026) {
+        if (!isNaN(dt) && dt.getFullYear() === 2026) {
             const m = dt.getMonth();
             usageTotal[m]++;
             if (parseInt(d.reemplazo || 0) > 0) replacements[m]++;
@@ -754,29 +777,62 @@ async function saveData() {
     };
 
     try {
-        await fetch(SCRIPT_URL, {
+        // IMPORTANTE: NO usar 'no-cors' para POST
+        const response = await fetch(SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(payload)
         });
         
-        localStorage.removeItem('franco_draft');
-        bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+        // Verificar si la respuesta fue exitosa
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
-        Swal.fire({
-            icon: 'success',
-            title: `Registro ${payload.action === 'create' ? 'creado' : 'actualizado'} correctamente`,
-            timer: 2000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        });
+        const result = await response.json();
         
-        setTimeout(() => load(), 500);
+        if (result.status === 'success') {
+            localStorage.removeItem('franco_draft');
+            bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+            
+            Swal.fire({
+                icon: 'success',
+                title: `Registro ${payload.action === 'create' ? 'creado' : 'actualizado'} correctamente`,
+                text: result.message || 'Los datos se han guardado en Google Sheets',
+                timer: 2000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+            
+            // Recargar los datos
+            setTimeout(() => load(), 500);
+        } else {
+            throw new Error(result.message || 'Error desconocido al guardar');
+        }
     } catch (e) {
         console.error('Error al guardar:', e);
-        Swal.fire('Error', 'No se pudo guardar el registro. Verifica tu conexión.', 'error');
+        
+        // Mostrar mensaje de error detallado
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al guardar',
+            html: `No se pudo guardar el registro.<br><br>
+                   <b>Posibles causas:</b><br>
+                   • La Web App de Google Apps Script no está publicada correctamente<br>
+                   • La URL de SCRIPT_URL es incorrecta<br>
+                   • El script necesita permisos adicionales<br><br>
+                   <b>Solución:</b><br>
+                   1. Abre tu archivo .gs en Google Apps Script<br>
+                   2. Ve a "Publicar" > "Implementar como aplicación web"<br>
+                   3. Asegúrate de que "Quién tiene acceso" sea "Cualquier persona"<br>
+                   4. Copia la NUEVA URL y actualiza SCRIPT_URL<br>
+                   5. Ejecuta la función 'setup' en el editor de Apps Script`,
+            confirmButtonText: 'Entendido'
+        });
+    } finally {
         if (loadingEl) loadingEl.style.display = 'none';
     }
 }
@@ -797,16 +853,29 @@ async function deleteItem(id) {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.style.display = 'flex';
         try {
-            await fetch(SCRIPT_URL, {
+            const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ action: 'delete', id: id })
             });
-            Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-            setTimeout(() => load(), 500);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
+                setTimeout(() => load(), 500);
+            } else {
+                throw new Error(data.message || 'Error al eliminar');
+            }
         } catch (e) {
-            Swal.fire('Error', 'No se pudo eliminar.', 'error');
+            console.error('Error al eliminar:', e);
+            Swal.fire('Error', 'No se pudo eliminar el registro.', 'error');
             if (loadingEl) loadingEl.style.display = 'none';
         }
     }
@@ -946,7 +1015,7 @@ function generatePDF() {
 
     const mesData = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+        return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
     doc.setFillColor(0, 51, 102);
