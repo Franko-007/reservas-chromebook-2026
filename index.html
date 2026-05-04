@@ -17,7 +17,7 @@
 
     <div id="loading">
         <div class="spinner-border text-success" style="width: 3rem; height: 3rem;" role="status"></div>
-        <span class="mt-3 fw-bold text-dark">Sincronizando con el Panel de Franco...</span>
+        <span class="mt-3 fw-bold text-dark">Sincronizando con Google Sheets...</span>
     </div>
 
     <div class="header-main">
@@ -54,52 +54,40 @@
         </div>
 
         <div class="kpi-row">
-            <!-- 1. Total Préstamos del Mes -->
             <div class="kpi-card" onclick="resetApp()" title="Ver todos los registros del mes">
                 <h6>Total Préstamos</h6>
                 <div class="kpi-value" id="kpi-total" style="color:#107c41">0</div>
-
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-total-bar" style="background:#107c41;width:0%"></div></div>
             </div>
-            <!-- 2. Préstamos de la Semana -->
-            <div class="kpi-card" onclick="irASemanActual()" title="Ver préstamos de esta semana" style="position:relative;">
+            <div class="kpi-card" onclick="irASemanaActual()" title="Ver préstamos de esta semana" style="position:relative;">
                 <div id="kpiSemanaGlow" style="display:none;position:absolute;inset:0;background:linear-gradient(135deg,rgba(21,101,192,0.07),rgba(13,71,161,0.04));border-radius:12px;pointer-events:none;"></div>
                 <h6 style="color:#1565c0;">Esta Semana</h6>
                 <div class="kpi-value" id="kpi-semana" style="color:#1976d2">0</div>
                 <div id="kpiSemanaLabel" style="font-size:0.65rem;color:#999;margin-top:5px;font-weight:600;">lun – vie</div>
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-semana-bar" style="background:#1976d2;width:0%"></div></div>
             </div>
-            <!-- 3. Uso de Laboratorio -->
             <div class="kpi-card" onclick="setFilterMode('lab')" title="Filtrar clases de laboratorio">
                 <h6>Laboratorio</h6>
                 <div class="kpi-value" id="kpi-lab" style="color:#6f42c1">0</div>
-
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-lab-bar" style="background:#6f42c1;width:0%"></div></div>
             </div>
-            <!-- 4. Uso de Reemplazos -->
             <div class="kpi-card" onclick="setFilterMode('reemp')" title="Filtrar uso de equipos de reemplazo">
                 <h6>Reemplazos</h6>
                 <div class="kpi-value" id="kpi-reemp" style="color:#dc3545">0</div>
-
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-reemp-bar" style="background:#dc3545;width:0%"></div></div>
             </div>
-            <!-- 5. Tasa Retorno OK -->
             <div class="kpi-card" onclick="setFilterMode('ok')" title="Ver devoluciones sin novedad">
                 <h6>Tasa Retorno</h6>
                 <div class="kpi-value" id="kpi-ok" style="color:#198754">0%</div>
-
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-ok-bar" style="background:#198754;width:0%"></div></div>
             </div>
-            <!-- 6. Dañados -->
             <div class="kpi-card" onclick="setFilterMode('damaged')" title="Ver equipos con daño reportado">
                 <h6>Dañados</h6>
                 <div class="kpi-value" id="kpi-damaged" style="color:var(--danger-red)">0</div>
-
                 <div class="kpi-mini-bar"><div class="kpi-mini-bar-fill" id="kpi-damaged-bar" style="background:var(--danger-red);width:0%"></div></div>
             </div>
         </div>
 
-        <!-- STOCK VISUAL -->
         <div class="mx-4 mb-3">
             <div class="p-3 rounded-3 shadow-sm" style="background:white; border:1px solid #eee;">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -107,7 +95,7 @@
                     <span class="fw-bold" style="font-size:0.8rem; color:#555;">
                         <span id="stock-en-uso" style="color:#dc3545;">0</span> en préstamo &nbsp;·&nbsp;
                         <span id="stock-disponible" style="color:#198754;">0</span> disponibles &nbsp;·&nbsp;
-                        Total: <span id="stock-total">40</span>
+                        Total: <span id="stock-total">115</span>
                     </span>
                 </div>
                 <div style="background:#f0f0f0; border-radius:20px; height:18px; overflow:hidden; position:relative;">
@@ -117,7 +105,7 @@
                 <div class="d-flex justify-content-between mt-1" style="font-size:0.7rem; color:#999;">
                     <span>0</span>
                     <span id="stock-warning" style="color:#dc3545; font-weight:700; display:none;">⚠️ Stock al límite</span>
-                    <span id="stock-total-label">40 equipos</span>
+                    <span id="stock-total-label">115 Chromebooks · 4 Reemplazos</span>
                 </div>
             </div>
         </div>
@@ -127,7 +115,6 @@
             <button class="btn btn-sm btn-warning ms-3 fw-bold" onclick="setFilterMode('debt')">Ver Pendientes</button>
         </div>
 
-        <!-- ═══ PANEL DE ALERTAS PENDIENTES ═══ -->
         <div class="mx-4 mb-4" id="alertasPanelWrapper" style="display:none;">
             <div id="alertasPanel">
                 <div class="alertas-header">
@@ -140,65 +127,57 @@
             </div>
         </div>
 
-
-
-        <!-- ═══ PÁGINA: REGISTROS ═══ -->
         <div id="pageRegistros">
-        <div class="px-4 mb-4">
-            <div class="content-card">
-                <div class="row g-2 mb-4">
-                    <div class="col-md-7">
-                        <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="debouncedRender()">
+            <div class="px-4 mb-4">
+                <div class="content-card">
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-7">
+                            <input type="text" id="searchBox" class="form-control form-control-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" placeholder="🔍 Buscar por profesor o asignatura..." onkeyup="debouncedRender()">
+                        </div>
+                        <div class="col-md-5">
+                            <select id="courseSelect" class="form-select form-select-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" onchange="renderAll()">
+                                <option value="">Todos los Cursos</option>
+                                <optgroup label="Básica">
+                                    <option value="1° A">1° A</option><option value="1° B">1° B</option>
+                                    <option value="2° A">2° A</option><option value="2° B">2° B</option>
+                                    <option value="3° A">3° A</option><option value="3° B">3° B</option>
+                                    <option value="4° A">4° A</option><option value="4° B">4° B</option>
+                                    <option value="5° A">5° A</option><option value="5° B">5° B</option>
+                                    <option value="6° A">6° A</option><option value="6° B">6° B</option>
+                                    <option value="7° A">7° A</option><option value="7° B">7° B</option>
+                                    <option value="8° A">8° A</option><option value="8° B">8° B</option>
+                                </optgroup>
+                                <optgroup label="Media">
+                                    <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
+                                    <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
+                                    <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
+                                    <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
+                                </optgroup>
+                            </select>
+                        </div>
                     </div>
-                    <div class="col-md-5">
-                        <select id="courseSelect" class="form-select form-select-lg shadow-sm border-0 bg-light" style="font-size: 0.9rem;" onchange="renderAll()">
-                            <option value="">Todos los Cursos</option>
-                            <optgroup label="Básica">
-                                <option value="1° A">1° A</option><option value="1° B">1° B</option>
-                                <option value="2° A">2° A</option><option value="2° B">2° B</option>
-                                <option value="3° A">3° A</option><option value="3° B">3° B</option>
-                                <option value="4° A">4° A</option><option value="4° B">4° B</option>
-                                <option value="5° A">5° A</option><option value="5° B">5° B</option>
-                                <option value="6° A">6° A</option><option value="6° B">6° B</option>
-                                <option value="7° A">7° A</option><option value="7° B">7° B</option>
-                                <option value="8° A">8° A</option><option value="8° B">8° B</option>
-                            </optgroup>
-                            <optgroup label="Media">
-                                <option value="I°m A">I°m A</option><option value="I°m B">I°m B</option>
-                                <option value="II°m A">II°m A</option><option value="II°m B">II°m B</option>
-                                <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
-                                <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
-                            </optgroup>
-                        </select>
+                    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                        <small class="text-muted fw-semibold" id="recordCount"></small>
+                        <small class="text-muted">Ordenado por fecha más reciente</small>
                     </div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                    <small class="text-muted fw-semibold" id="recordCount"></small>
-                    <small class="text-muted">Ordenado por fecha más reciente</small>
-                </div>
-                <div class="table-res">
-                    <table class="table table-hover align-middle text-center mb-0" id="mainTable">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Estado/Obs</th><th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody"></tbody>
-                    </table>
-                    <div id="emptyState" class="text-center py-5" style="display: none;">
-                        <img src="https://cdn-icons-png.flaticon.com/512/7486/7486754.png" width="80" style="opacity: 0.5; margin-bottom: 15px;">
-                        <h6 class="text-muted fw-bold">No se encontraron registros</h6>
-                        <p class="text-muted small">Intenta con otro filtro o término de búsqueda.</p>
+                    <div class="table-res">
+                        <table class="table table-hover align-middle text-center mb-0" id="mainTable">
+                            <thead>
+                                <tr><th>Fecha</th><th>Bloque</th><th>Curso</th><th>Asignatura</th><th>Profesor</th><th>Chr.</th><th>Ree.</th><th>Dev.</th><th>Estado/Obs</th><th>Acción</th></tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                        <div id="emptyState" class="text-center py-5" style="display: none;">
+                            <img src="https://cdn-icons-png.flaticon.com/512/7486/7486754.png" width="80" style="opacity: 0.5; margin-bottom: 15px;">
+                            <h6 class="text-muted fw-bold">No se encontraron registros</h6>
+                            <p class="text-muted small">Intenta con otro filtro o término de búsqueda.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        </div><!-- /pageRegistros -->
 
-        <!-- ═══ PÁGINA: ESTADÍSTICAS ═══ -->
         <div id="pageStats" style="display:none;">
-
-            <!-- Título de la página -->
             <div class="px-4 mb-4">
                 <div class="d-flex align-items-center gap-3 py-2 px-3 rounded-3" style="background:white; border-left:5px solid #0d6832; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
                     <span style="font-size:1.8rem;">📊</span>
@@ -209,7 +188,6 @@
                 </div>
             </div>
 
-            <!-- Fila 1: Anual + Estado General -->
             <div class="px-4 mb-4">
                 <div class="row g-4">
                     <div class="col-lg-8">
@@ -229,7 +207,6 @@
                 </div>
             </div>
 
-            <!-- Fila 2: Docente full-width -->
             <div class="px-4 mb-4">
                 <div class="content-card">
                     <h6 class="fw-bold mb-1 text-muted" style="text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">👩‍🏫 Préstamos por Docente</h6>
@@ -237,9 +214,8 @@
                     <div style="height:320px; width:100%;"><canvas id="chartDocente"></canvas></div>
                 </div>
             </div>
-
-        </div><!-- /pageStats -->
-    </div><!-- /container-fluid -->
+        </div>
+    </div>
 
     <div class="modal fade" id="resModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content border-0 shadow-lg">
@@ -248,7 +224,6 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
 
-            <!-- INDICADOR DE PASOS -->
             <div class="wizard-steps">
                 <div class="wizard-step active" id="wstep1">
                     <div class="wizard-dot">1</div>
@@ -270,9 +245,7 @@
                     <input type="hidden" id="fEstado">
                     <input type="hidden" id="fFechaCierre">
                     <input type="hidden" id="fRespCierre">
-                    <input type="hidden" id="fLabHidden">
 
-                    <!-- ══ PASO 1: Datos Básicos ══ -->
                     <div class="wizard-panel active" id="wpanel1">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -281,11 +254,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="fw-bold small text-muted">HORA DE AGENDA</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-0"><small>🕐</small></span>
-                                    <input type="time" id="fHora" class="form-control" oninput="saveDraft()" required>
-                                </div>
-                                <small class="text-muted" style="font-size:0.7rem;">Ingrese la hora (ej: 08:10)</small>
+                                <input type="time" id="fHora" class="form-control" oninput="saveDraft()" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="fw-bold small text-muted">CURSO</label>
@@ -307,10 +276,6 @@
                                         <option value="III°m A">III°m A</option><option value="III°m B">III°m B</option>
                                         <option value="IV°m A">IV°m A</option><option value="IV°m B">IV°m B</option>
                                     </optgroup>
-                                    <optgroup label="Especial">
-                                        <option value="ELECTIVO">ELECTIVO</option>
-                                        <option value="Reemplazo">Reemplazo</option>
-                                    </optgroup>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -323,7 +288,7 @@
                                     <select id="fProfesor" class="form-select border-primary shadow-sm" onchange="saveDraft()" required>
                                         <option value="">Seleccione un docente...</option>
                                     </select>
-                                    <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">&#x2795; Nuevo</button>
+                                    <button type="button" class="btn btn-outline-success fw-bold px-3" style="white-space:nowrap;" onclick="agregarDocente()">➕ Nuevo</button>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -333,16 +298,13 @@
                                         <div class="text-muted" style="font-size:0.78rem;">Marcar si la clase se realizó en el laboratorio</div>
                                     </div>
                                     <div class="form-check form-switch mb-0 ms-3">
-                                        <input class="form-check-input" type="checkbox" id="fLab" role="switch"
-                                               style="width:3em;height:1.6em;cursor:pointer;accent-color:#6f42c1;"
-                                               onchange="saveDraft()">
+                                        <input class="form-check-input" type="checkbox" id="fLab" role="switch" style="width:3em;height:1.6em;cursor:pointer;accent-color:#6f42c1;" onchange="saveDraft()">
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- ══ PASO 2: Equipos ══ -->
                     <div class="wizard-panel" id="wpanel2">
                         <div class="row g-3">
                             <div class="col-md-4">
@@ -357,13 +319,11 @@
                                 <label class="fw-bold small text-success">DEVUELTOS</label>
                                 <input type="number" id="fDev" class="form-control" oninput="validateCounts()" value="0" min="0">
                                 <small id="valMsg" class="text-danger fw-bold" style="display:none">⚠️ No coincide la suma</small>
-                                <small id="valMsgStock" class="text-warning fw-bold" style="display:none;background:#fff3cd;padding:2px 8px;border-radius:4px;"></small>
                             </div>
-                            <!-- N° Equipo de Reemplazo -->
                             <div class="col-12" id="nroEquipoWrapper" style="display:none;">
                                 <div class="p-3 rounded-3" style="background:#fff5f5;border:1.5px solid #dc3545;">
                                     <label class="fw-bold small text-danger d-block mb-2">🔴 EQUIPO DE REEMPLAZO ASIGNADO</label>
-                                    <div class="d-flex gap-2 flex-wrap" id="equipoReemplazoOpciones">
+                                    <div class="d-flex gap-2 flex-wrap">
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="fNroEquipo" id="eq1" value="Equipo 1" onchange="saveDraft()">
                                             <label class="form-check-label fw-bold" for="eq1" style="color:#b71c1c;">📦 Equipo 1</label>
@@ -383,11 +343,10 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Estado de Devolución -->
                             <div class="col-12">
                                 <div class="p-3 rounded-3" style="background:#f0f9ff;border:1.5px solid #0288d1;">
                                     <label class="fw-bold small d-block mb-2" style="color:#0277bd;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.5px;">📋 ESTADO DE LA DEVOLUCIÓN</label>
-                                    <div class="d-flex gap-2 flex-wrap" id="estadoDevWrapper">
+                                    <div class="d-flex gap-2 flex-wrap">
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="fEstadoDev" id="edOk" value="ok" onchange="onEstadoDevChange()">
                                             <label class="form-check-label fw-bold text-success" for="edOk">✅ Sin novedad</label>
@@ -403,43 +362,17 @@
                                     </div>
                                     <div id="tipoDanioWrapper" style="display:none;margin-top:10px;">
                                         <label class="fw-bold small text-danger mb-1 d-block">TIPO DE DAÑO</label>
-                                        <input type="text" id="fTipoDanio" class="form-control border-danger"
-                                               placeholder="Describe el daño (ej: pantalla rayada, tecla rota...)"
-                                               oninput="saveDraft()">
+                                        <input type="text" id="fTipoDanio" class="form-control border-danger" placeholder="Describe el daño..." oninput="saveDraft()">
                                     </div>
                                 </div>
                             </div>
-                            <!-- Observación -->
-                            <div class="col-12" id="obsSelectWrapper">
-                                <label class="fw-bold small text-muted">OBSERVACIÓN TÉCNICO</label>
-                                <div id="obsNuevaReservaInfo" class="d-flex align-items-center gap-2 p-2 rounded-2" style="background:#eceff1;border:1.5px solid #b0bec5;">
-                                    <span style="font-size:1.1rem;">🕐</span>
-                                    <div>
-                                        <div style="font-size:0.82rem;font-weight:700;color:#546e7a;">Se registrará como <b>"Pendiente"</b> automáticamente</div>
-                                        <div style="font-size:0.7rem;color:#90a4ae;">Podrás editarla una vez que el docente devuelva los equipos</div>
-                                    </div>
-                                </div>
-                                <select id="fObs" class="form-select border-primary shadow-sm" onchange="saveDraft()" style="display:none;">
-                                    <option value="Sin novedad">✅ Sin novedad</option>
-                                    <option value="Pantalla Dañada">🔴 Pantalla Dañada</option>
-                                    <option value="Teclado Falla">🟠 Teclado Falla</option>
-                                    <option value="No Enciende">⚫ No Enciende</option>
-                                </select>
-                            </div>
-                            <div class="col-12" id="obsEditWrapper" style="display:none;">
-                                <label class="fw-bold small text-muted d-flex align-items-center gap-2">
-                                    OBSERVACIÓN TÉCNICO
-                                    <span class="badge bg-success" style="font-size:0.65rem;">✏️ EDITABLE – Equipos devueltos</span>
-                                </label>
-                                <textarea id="fObsEdit" class="form-control border-success shadow-sm" rows="2"
-                                          placeholder="Ingrese observación del técnico tras la devolución..."
-                                          oninput="saveDraft()" style="resize:none;font-size:0.9rem;"></textarea>
-                                <small class="text-success fw-bold" style="font-size:0.7rem;">🔓 Editable porque los equipos ya fueron devueltos</small>
+                            <div class="col-12">
+                                <label class="fw-bold small text-muted">OBSERVACIÓN ADICIONAL</label>
+                                <textarea id="fObs" class="form-control" rows="2" placeholder="Observaciones del técnico..." oninput="saveDraft()"></textarea>
                             </div>
                         </div>
                     </div>
 
-                    <!-- ══ PASO 3: Confirmación ══ -->
                     <div class="wizard-panel" id="wpanel3">
                         <div class="confirm-card">
                             <h6>📅 Datos de la Clase</h6>
@@ -456,7 +389,7 @@
                             <div class="confirm-row"><span class="clabel">Reemplazos</span><span class="cval" id="cv-ree">0</span></div>
                             <div class="confirm-row"><span class="clabel">Devueltos</span><span class="cval" id="cv-dev">0</span></div>
                             <div class="confirm-row"><span class="clabel">Equipo reemplazo</span><span class="cval" id="cv-nroeq">—</span></div>
-                            <div class="confirm-row"><span class="clabel">Estado devolución</span><span class="cval" id="cv-estado">—</span></div>
+                            <div class="confirm-row"><span class="clabel">Estado</span><span class="cval" id="cv-estado">—</span></div>
                         </div>
                         <div class="p-3 rounded-3 text-center" style="background:#f0fff4;border:1.5px solid #81c784;">
                             <div style="font-size:0.8rem;color:#2e7d32;font-weight:700;">✅ Todo listo para guardar en Google Sheets</div>
@@ -465,7 +398,6 @@
                 </form>
             </div>
 
-            <!-- NAVEGACIÓN DEL WIZARD -->
             <div class="wizard-nav">
                 <button class="btn btn-outline-secondary fw-bold px-4" id="wBtnPrev" onclick="wizardPrev()" style="display:none;">← Anterior</button>
                 <div class="flex-grow-1"></div>
@@ -476,7 +408,8 @@
     </div>
 
     <footer class="footer">
-        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Creado Por: <b>Franco San Martín</b>.
+        © NSG 2026 - <b>Derechos Reservados</b> - Área de Informática – Creado Por: <b>Franco San Martín</b>
+    </footer>
 
     <script src="scripts.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
