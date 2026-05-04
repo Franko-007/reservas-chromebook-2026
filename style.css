@@ -17,7 +17,6 @@ body {
 
 .kpi-card, .btn, .tab-btn, tr { transition: var(--transition); }
 
-/* ── HEADER ─────────────────────────────────────────── */
 .header-main {
     background-color: #0d6832;
     color: white;
@@ -37,7 +36,6 @@ body {
 
 .header-titles p { font-size: 0.9rem; margin: 0; opacity: 0.9; }
 
-/* ── ACTION BAR ─────────────────────────────────────── */
 .action-bar {
     background: white;
     padding: 10px 25px;
@@ -50,7 +48,6 @@ body {
     z-index: 1000;
 }
 
-/* ── MES / SEMANA ───────────────────────────────────── */
 .month-selector {
     display: flex;
     align-items: center;
@@ -100,7 +97,6 @@ body {
     box-shadow: 0 4px 8px rgba(13,104,50,0.3);
 }
 
-/* ── KPI CARDS ──────────────────────────────────────── */
 .kpi-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -142,23 +138,6 @@ body {
     line-height: 1;
 }
 
-/* Tendencia */
-.kpi-trend {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    margin-top: 6px;
-    padding: 2px 8px;
-    border-radius: 20px;
-}
-
-.kpi-trend.up   { background: #e8f5e9; color: #2e7d32; }
-.kpi-trend.down { background: #fce4ec; color: #c62828; }
-.kpi-trend.neu  { background: #f5f5f5; color: #757575; }
-
-/* Mini barra de contexto */
 .kpi-mini-bar {
     height: 3px;
     border-radius: 2px;
@@ -173,16 +152,6 @@ body {
     transition: width 0.7s ease;
 }
 
-/* ── LAYOUT ─────────────────────────────────────────── */
-.main-grid {
-    display: grid;
-    grid-template-columns: 1fr 350px;
-    gap: 25px;
-    padding: 0 25px 20px 25px;
-}
-
-@media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
-
 .content-card {
     background: white;
     border-radius: 12px;
@@ -191,9 +160,6 @@ body {
     height: 100%;
 }
 
-.chart-box { height: 250px; width: 100%; margin-top: 15px; }
-
-/* ── TABLA ──────────────────────────────────────────── */
 .table-res {
     overflow-y: auto;
     max-height: 600px;
@@ -213,12 +179,12 @@ thead th {
     z-index: 10;
 }
 
-.row-lab td              { background-color: #f5f0ff !important; }
-.row-lab td:first-child  { border-left: 6px solid var(--purple-lab) !important; background-color: #ede7f6 !important; }
-.row-pending td              { background-color: #fffdf5 !important; }
-.row-pending td:first-child  { border-left: 6px solid #ffc107 !important; }
-.row-damaged td              { background-color: #fff5f5 !important; }
-.row-damaged td:first-child  { border-left: 6px solid var(--danger-red) !important; }
+.row-lab td { background-color: #f5f0ff !important; }
+.row-lab td:first-child { border-left: 6px solid var(--purple-lab) !important; }
+.row-pending td { background-color: #fffdf5 !important; }
+.row-pending td:first-child { border-left: 6px solid #ffc107 !important; }
+.row-damaged td { background-color: #fff5f5 !important; }
+.row-damaged td:first-child { border-left: 6px solid var(--danger-red) !important; }
 
 .badge-status {
     padding: 4px 8px;
@@ -228,7 +194,6 @@ thead th {
     text-transform: uppercase;
 }
 
-/* ── PANEL DE ALERTAS PENDIENTES ────────────────────── */
 #alertasPanel {
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
@@ -274,7 +239,6 @@ thead th {
 }
 
 .alerta-item:hover { background: #fff5f5; }
-.alerta-item:last-child { border-bottom: none; }
 
 .alerta-dias {
     background: #c62828;
@@ -289,20 +253,11 @@ thead th {
     line-height: 1.1;
 }
 
-.alerta-dias.hoy    { background: #388e3c; }
+.alerta-dias.hoy { background: #388e3c; }
 .alerta-dias.reciente { background: #f57c00; }
 
 .alerta-info { flex: 1; min-width: 0; }
-
-.alerta-nombre {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #333;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
+.alerta-nombre { font-size: 0.78rem; font-weight: 700; color: #333; }
 .alerta-detalle { font-size: 0.68rem; color: #888; margin-top: 1px; }
 
 .alertas-empty {
@@ -312,7 +267,6 @@ thead th {
     font-size: 0.8rem;
 }
 
-/* ── WIZARD MODAL ───────────────────────────────────── */
 .wizard-steps {
     display: flex;
     align-items: flex-start;
@@ -382,18 +336,16 @@ thead th {
 }
 
 .wizard-step.active .wizard-label { color: #0d6832; }
-.wizard-step.done .wizard-label   { color: #0d6832; }
+.wizard-step.done .wizard-label { color: #0d6832; }
 
-/* Paneles del wizard */
 .wizard-panel { display: none; animation: fadeInPanel 0.25s ease; }
 .wizard-panel.active { display: block; }
 
 @keyframes fadeInPanel {
     from { opacity: 0; transform: translateX(8px); }
-    to   { opacity: 1; transform: translateX(0); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
-/* Botones de navegación wizard */
 .wizard-nav {
     display: flex;
     gap: 10px;
@@ -402,7 +354,6 @@ thead th {
     border-top: 1px solid #eee;
 }
 
-/* Resumen de confirmación en paso 3 */
 .confirm-card {
     background: #f8fffe;
     border: 1.5px solid #b2dfdb;
@@ -430,16 +381,14 @@ thead th {
 
 .confirm-row:last-child { border-bottom: none; }
 .confirm-row .clabel { color: #888; }
-.confirm-row .cval   { font-weight: 700; color: #333; }
+.confirm-row .cval { font-weight: 700; color: #333; }
 
-/* ── LOADING ────────────────────────────────────────── */
 #loading {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: rgba(255,255,255,0.8);
     backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -447,7 +396,6 @@ thead th {
     flex-direction: column;
 }
 
-/* ── FOOTER ─────────────────────────────────────────── */
 .footer {
     text-align: center;
     padding: 20px;
@@ -457,7 +405,6 @@ thead th {
     color: #999;
 }
 
-/* ── MISC ───────────────────────────────────────────── */
 .val-warning {
     background-color: #fff3cd !important;
     border-color: #ffecb5 !important;
