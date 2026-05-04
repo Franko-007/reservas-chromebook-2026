@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN ====================
 // IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyEjpusGN9Ej0Jj5RJS8wXIKQibnFrFywMcrl1MrTlVTz2dEiivd61-gQYRr3PVGKU/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9b6-xsGQRS0KiRg1k6BfU8Kv5jDUFT6cTdMWDp7Uango5fZkdu9ECpJBAadl3-nk/exec";
 
 const STOCK_MAXIMO = 115;
 const STOCK_REEMPLAZO = 4;
@@ -53,40 +53,6 @@ function getWeekRanges(year, month) {
         4: { start: firstWeekEnd + 15, end: Math.min(firstWeekEnd + 21, daysInMonth) }
     };
     return weekRanges;
-}
-
-
-// ==================== FORMATO HORA MANUAL 24H ====================
-function formatHoraInput(input) {
-    // Dejar solo dígitos
-    let digits = input.value.replace(/\D/g, '');
-    if (digits.length === 0) { input.value = ''; return; }
-
-    // Limitar a 4 dígitos (HHMM)
-    digits = digits.slice(0, 4);
-
-    // Insertar ":" automáticamente al llegar a 3+ dígitos
-    if (digits.length >= 3) {
-        input.value = digits.slice(0, 2) + ':' + digits.slice(2);
-    } else {
-        input.value = digits;
-    }
-
-    // Marcar inválido si hora o minuto fuera de rango
-    if (digits.length === 4) {
-        const h = parseInt(digits.slice(0, 2));
-        const m = parseInt(digits.slice(2));
-        if (h > 23 || m > 59) {
-            input.setCustomValidity('Hora inválida');
-            input.classList.add('is-invalid');
-        } else {
-            input.setCustomValidity('');
-            input.classList.remove('is-invalid');
-        }
-    } else {
-        input.setCustomValidity('');
-        input.classList.remove('is-invalid');
-    }
 }
 
 function fillDocentes() {
@@ -811,16 +777,10 @@ async function saveData() {
     };
 
     try {
-        // IMPORTANTE: NO usar 'no-cors' para POST
-        const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
+        // Enviamos como GET con parámetro ?data=... para evitar CORS preflight
+        const encoded = encodeURIComponent(JSON.stringify(payload));
+        const response = await fetch(SCRIPT_URL + '?data=' + encoded);
         
-        // Verificar si la respuesta fue exitosa
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -887,13 +847,8 @@ async function deleteItem(id) {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.style.display = 'flex';
         try {
-            const response = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ action: 'delete', id: id })
-            });
+            const delPayload = encodeURIComponent(JSON.stringify({ action: 'delete', id: id }));
+            const response = await fetch(SCRIPT_URL + '?data=' + delPayload);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
