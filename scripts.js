@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN ====================
 // IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwpTjv2y6ayOrdMTtaKJWeVaVJFjhp2hznacspQ7IBgZ8woelHsX0AFnvHII4QGhe8/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyEjpusGN9Ej0Jj5RJS8wXIKQibnFrFywMcrl1MrTlVTz2dEiivd61-gQYRr3PVGKU/exec";
 
 const STOCK_MAXIMO = 115;
 const STOCK_REEMPLAZO = 4;
