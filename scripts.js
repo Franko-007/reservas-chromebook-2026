@@ -55,6 +55,40 @@ function getWeekRanges(year, month) {
     return weekRanges;
 }
 
+
+// ==================== FORMATO HORA MANUAL 24H ====================
+function formatHoraInput(input) {
+    // Dejar solo dígitos
+    let digits = input.value.replace(/\D/g, '');
+    if (digits.length === 0) { input.value = ''; return; }
+
+    // Limitar a 4 dígitos (HHMM)
+    digits = digits.slice(0, 4);
+
+    // Insertar ":" automáticamente al llegar a 3+ dígitos
+    if (digits.length >= 3) {
+        input.value = digits.slice(0, 2) + ':' + digits.slice(2);
+    } else {
+        input.value = digits;
+    }
+
+    // Marcar inválido si hora o minuto fuera de rango
+    if (digits.length === 4) {
+        const h = parseInt(digits.slice(0, 2));
+        const m = parseInt(digits.slice(2));
+        if (h > 23 || m > 59) {
+            input.setCustomValidity('Hora inválida');
+            input.classList.add('is-invalid');
+        } else {
+            input.setCustomValidity('');
+            input.classList.remove('is-invalid');
+        }
+    } else {
+        input.setCustomValidity('');
+        input.classList.remove('is-invalid');
+    }
+}
+
 function fillDocentes() {
     const select = document.getElementById('fProfesor');
     if (!select) return;
@@ -106,7 +140,7 @@ async function load() {
 
         if (data.status === 'success') {
             db = data.data;
-            console.log('✅ Datos cargados:', db.length, 'registros');
+            console.log('✅ Datos cargrados:', db.length, 'registros');
             
             Swal.fire({
                 icon: 'success',
@@ -769,7 +803,6 @@ async function saveData() {
         reemplazo: ree,
         devueltos: dev,
         observacion: obsValue,
-        estado_dev: estadoDevSeleccionado,
         nro_equipo_reemplazo: nroEquipo,
         uso_laboratorio: esLab,
         estado_operativo: estado,
@@ -778,14 +811,11 @@ async function saveData() {
     };
 
     try {
-        // IMPORTANTE: Apps Script no maneja el preflight de application/json.
-        // Se envía como text/plain (simple request, sin preflight) pero el
-        // body sigue siendo JSON válido que el servidor puede parsear con
-        // JSON.parse(e.postData.contents).
+        // IMPORTANTE: NO usar 'no-cors' para POST
         const response = await fetch(SCRIPT_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8'
+            headers: { 
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
         });
@@ -859,8 +889,8 @@ async function deleteItem(id) {
         try {
             const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8'
+                headers: { 
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ action: 'delete', id: id })
             });
