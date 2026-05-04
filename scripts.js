@@ -1,55 +1,59 @@
-function getEstado(r) {
-    const obs = (r.observacion || "").toLowerCase();
-    const chr = parseInt(r.chromebooks || 0);
-    const ree = parseInt(r.reemplazo || 0);
-    const dev = parseInt(r.devueltos || 0);
+// ==================== CONFIGURACIÓN ====================
+// IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxN2XQAMGfzqDHYkAdfdPrkQ6d6Mni72WRZajuQyyewjDhVAdemvVuUrN0SUY54x_o/exec";
 
-    // Laboratorio: campo dedicado o legado en observacion
-    if (r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" || obs.includes("laboratorio")) return "LABORATORIO";
-    if (isDamagedRecord(r)) return "DAÑADO";
-    if ((chr + ree) > dev) return "ACTIVO";
-    return "CERRADO";
-}
+const STOCK_MAXIMO = 115;
+const STOCK_REEMPLAZO = 4;
 
-function calcEstado(chr, ree, dev, obs, lab) {
-    obs = (obs || "").toLowerCase();
-    if (lab) return "LABORATORIO";
-    if (obs.includes("dañ") || obs.includes("pantalla") || obs.includes("teclado") || obs.includes("enciende")) return "DAÑADO";
-    if ((parseInt(chr || 0) + parseInt(ree || 0)) > parseInt(dev || 0)) return "ACTIVO";
-    return "CERRADO";
-}
+const DOCENTES_NSG = ["ALEXIS CORTÉS", "ALLYSON RIOS", "ANA OGAZ", "ANDREA SALAZAR", "ANDREA DONOSO", "AVIGUEY GONZALEZ", "CAMILA GONZÁLEZ", "CARLA MERA", "CARLOS ARAYA", "CARMEN ÁLVAREZ", "CAROLINA MIRANDA", "CAROLINA REYES", "CECILIA GARCÍA", "CLAUDIA TOLEDO", "CONSTANZA LÓPEZ", "DANIEL VITTA", "DANIELA VERA", "DANIELA VALENZUELA", "DEBORA GAETE", "DEBORA GONZÁLEZ", "ELIZABETH MIRANDA", "ERIKA KINDERMANN", "FERNANDA RÍOS", "FRANCISCA MAUREIRA", "FRANCISCA COFRÉ", "FRANCISCA VIZCAYA", "GIOVANNA ARIAS", "GOLDIE FARÍAS", "HERNÁN REYES", "JAVIERA ALIAGA", "JOAQUÍN ALMUNA", "KARIMME GUTIÉRREZ", "KARINA BARRIOS", "KAROLINA RIFFO", "LEONARDO RÍOS", "LORENA ARANCIBIA", "LUIS SÁNCHEZ", "MACARENA BELTRÁN", "MARÍA MONZÓN", "MARÍA GONZÁLEZ", "MARISOL GUAJARDO", "MATÍAS CUEVAS", "NATALIA CARTES", "NATALY HIDALGO", "NICOLE BELLO", "PAOLA ÁVILA", "PATRICIA NÚÑEZ", "PAULINA ARGOMEDO", "PRISCILA VALENZUELA", "REINA ORTEGA", "STEPHANY GUZMÁN", "VÍCTOR BARRIENTOS", "YADIA CERDA", "YESSENIA SÁNCHEZ"];
 
-// === FUNCIÓN MEJORADA PARA DETECTAR DAÑOS ===
+let db = [];
+let viewDate = new Date();
+viewDate.setDate(1);
+let filterMode = 'all';
+let currentWeek = 0;
+let charts = {};
+let _docentesExtra = [];
+let debounceTimer;
+let _wizardStep = 1;
+const WIZARD_TOTAL = 3;
+const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+// ==================== FUNCIONES AUXILIARES ====================
 function isDamagedRecord(record) {
     const obs = (record.observacion || "").toLowerCase();
     const damagedKeywords = ["dañ", "pantalla", "teclado", "enciende", "rota", "rayada", "falla", "malo", "averiado", "roto", "golpe", "quemado"];
     const hasDamageKeyword = damagedKeywords.some(keyword => obs.includes(keyword));
     const hasDamageState = record.estado_dev === "danio";
-    const isExplicitDamage = obs === "con daño" || obs === "dañado" || obs === "daño";
-    return hasDamageKeyword || hasDamageState || isExplicitDamage;
+    return hasDamageKeyword || hasDamageState;
 }
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxN2XQAMGfzqDHYkAdfdPrkQ6d6Mni72WRZajuQyyewjDhVAdemvVuUrN0SUY54x_o/exec";
-const _hoy = new Date();
-const _diaHoy = _hoy.getDate();
-const _semanaInicial = _diaHoy <= 7 ? 1 : _diaHoy <= 14 ? 2 : _diaHoy <= 21 ? 3 : 4;
-let db = [],
-    viewDate = new Date(_hoy.getFullYear(), _hoy.getMonth(), 1),
-    filterMode = 'all',
-    currentWeek = _semanaInicial,
-    charts = {};
-const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-const DOCENTES_NSG = ["ALEXIS CORTÉS", "ALLYSON RIOS", "ANA OGAZ", "ANDREA SALAZAR", "ANDREA DONOSO", "AVIGUEY GONZALEZ", "CAMILA GONZÁLEZ", "CARLA MERA", "CARLOS ARAYA", "CARMEN ÁLVAREZ", "CAROLINA MIRANDA", "CAROLINA REYES", "CECILIA GARCÍA", "CLAUDIA TOLEDO", "CONSTANZA LÓPEZ", "DANIEL VITTA", "DANIELA VERA", "DANIELA VALENZUELA", "DEBORA GAETE", "DEBORA GONZÁLEZ", "ELIZABETH MIRANDA", "ERIKA KINDERMANN", "FERNANDA RÍOS", "FRANCISCA MAUREIRA", "FRANCISCA COFRÉ", "FRANCISCA VIZCAYA", "GIOVANNA ARIAS", "GOLDIE FARÍAS", "HERNÁN REYES", "JAVIERA ALIAGA", "JOAQUÍN ALMUNA", "KARIMME GUTIÉRREZ", "KARINA BARRIOS", "KAROLINA RIFFO", "LEONARDO RÍOS", "LORENA ARANCIBIA", "LUIS SÁNCHEZ", "MACARENA BELTRÁN", "MARÍA MONZÓN", "MARÍA GONZÁLEZ", "MARISOL GUAJARDO", "MATÍAS CUEVAS", "NATALIA CARTES", "NATALY HIDALGO", "NICOLE BELLO", "PAOLA ÁVILA", "PATRICIA NÚÑEZ", "PAULINA ARGOMEDO", "PRISCILA VALENZUELA", "REINA ORTEGA", "STEPHANY GUZMÁN", "VÍCTOR BARRIENTOS", "YADIA CERDA", "YESSENIA SÁNCHEZ"];
-
-let debounceTimer;
-
-function debouncedRender() {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(renderAll, 300);
+function getEstado(r) {
+    const obs = (r.observacion || "").toLowerCase();
+    const chr = parseInt(r.chromebooks || 0);
+    const ree = parseInt(r.reemplazo || 0);
+    const dev = parseInt(r.devueltos || 0);
+    if (r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true") return "LABORATORIO";
+    if (isDamagedRecord(r)) return "DAÑADO";
+    if ((chr + ree) > dev) return "ACTIVO";
+    return "CERRADO";
 }
 
-const _docentesExtra = [];
+function getWeekRanges(year, month) {
+    const firstDayOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let firstMonday = new Date(firstDayOfMonth);
+    while (firstMonday.getDay() !== 1) firstMonday.setDate(firstMonday.getDate() + 1);
+    let firstWeekEnd = 7 - (firstDayOfMonth.getDay() === 0 ? 6 : firstDayOfMonth.getDay() - 1);
+    firstWeekEnd = Math.min(firstWeekEnd, daysInMonth);
+    const weekRanges = {
+        1: { start: 1, end: firstWeekEnd },
+        2: { start: firstWeekEnd + 1, end: Math.min(firstWeekEnd + 7, daysInMonth) },
+        3: { start: firstWeekEnd + 8, end: Math.min(firstWeekEnd + 14, daysInMonth) },
+        4: { start: firstWeekEnd + 15, end: Math.min(firstWeekEnd + 21, daysInMonth) }
+    };
+    return weekRanges;
+}
 
 function fillDocentes() {
     const select = document.getElementById('fProfesor');
@@ -79,119 +83,81 @@ function agregarDocente() {
     saveDraft();
 }
 
+function debouncedRender() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(renderAll, 300);
+}
+
+// ==================== CARGA DE DATOS ====================
 async function load() {
     const loadingEl = document.getElementById('loading');
     if (loadingEl) loadingEl.style.display = 'flex';
     fillDocentes();
 
     try {
-        const r = await fetch(SCRIPT_URL);
-        if (!r.ok) throw new Error("Fallo en la respuesta del servidor");
+        const response = await fetch(SCRIPT_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
 
-        db = await r.json();
+        if (data.status === 'success') {
+            db = data.data;
+            console.log('✅ Datos cargados:', db.length, 'registros');
+        } else {
+            throw new Error(data.message || 'Error al cargar datos');
+        }
 
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-        Toast.fire({
+        Swal.fire({
             icon: 'success',
-            title: 'Datos sincronizados correctamente'
+            title: 'Datos sincronizados',
+            text: `Se cargaron ${db.length} registros correctamente`,
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
         });
 
-        document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === _semanaInicial));
         renderAll();
         renderAnualChart();
-    } catch (e) {
-        console.error("Error:", e);
-        Swal.fire('Error de Conexión', 'No se pudieron cargar los datos de Google Sheets.', 'error');
+    } catch (error) {
+        console.error('❌ Error detallado:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de Conexión',
+            text: 'No se pudieron cargar los datos de Google Sheets. Verifica que el script esté publicado correctamente.',
+            footer: '<a href="#" onclick="location.reload()">Intentar de nuevo</a>'
+        });
     } finally {
         if (loadingEl) loadingEl.style.display = 'none';
     }
 }
 
-// Función para obtener rangos de semanas basados en el mes actual
-function getWeekRanges(year, month) {
-    const firstDayOfMonth = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // Encontrar el primer lunes del mes
-    let firstMonday = new Date(firstDayOfMonth);
-    while (firstMonday.getDay() !== 1) {
-        firstMonday.setDate(firstMonday.getDate() + 1);
-    }
-    
-    // Calcular el fin de la primera semana
-    let firstWeekEnd;
-    if (firstDayOfMonth.getDay() === 1) {
-        // El mes comienza en lunes
-        firstWeekEnd = 7;
-    } else if (firstDayOfMonth.getDay() === 0) {
-        // El mes comienza en domingo
-        firstWeekEnd = 1;
-    } else {
-        // El mes comienza en martes a sábado
-        firstWeekEnd = 7 - (firstDayOfMonth.getDay() - 1);
-    }
-    
-    firstWeekEnd = Math.min(firstWeekEnd, daysInMonth);
-    
-    const weekRanges = {
-        1: { start: 1, end: firstWeekEnd },
-        2: { start: firstWeekEnd + 1, end: Math.min(firstWeekEnd + 7, daysInMonth) },
-        3: { start: firstWeekEnd + 8, end: Math.min(firstWeekEnd + 14, daysInMonth) },
-        4: { start: firstWeekEnd + 15, end: Math.min(firstWeekEnd + 21, daysInMonth) },
-        5: { start: firstWeekEnd + 22, end: daysInMonth }
-    };
-    
-    // Limpiar semanas inválidas
-    for (let i = 1; i <= 5; i++) {
-        if (weekRanges[i].start > daysInMonth) {
-            weekRanges[i].start = daysInMonth + 1;
-            weekRanges[i].end = daysInMonth;
-        }
-    }
-    
-    return weekRanges;
-}
-
+// ==================== RENDERIZADO PRINCIPAL ====================
 function renderAll() {
     const displayDateEl = document.getElementById('displayDate');
     if (displayDateEl) displayDateEl.innerText = `${mNames[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
 
-    const s = (document.getElementById('searchBox')?.value || "").toLowerCase();
-    const c = document.getElementById('courseSelect')?.value || "";
+    const searchTerm = (document.getElementById('searchBox')?.value || "").toLowerCase();
+    const courseFilter = document.getElementById('courseSelect')?.value || "";
+    const weekRanges = getWeekRanges(viewDate.getFullYear(), viewDate.getMonth());
 
     const baseFiltered = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
         return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
-    const weekRanges = getWeekRanges(viewDate.getFullYear(), viewDate.getMonth());
-
     const finalFiltered = baseFiltered.filter(d => {
-        const matchS = (d.profesor + d.asignatura).toLowerCase().includes(s);
-        const matchC = c === "" || d.curso === c;
-
-        let matchW = true;
+        const matchSearch = (d.profesor + d.asignatura).toLowerCase().includes(searchTerm);
+        const matchCourse = courseFilter === "" || d.curso === courseFilter;
+        let matchWeek = true;
         if (currentWeek > 0 && weekRanges[currentWeek]) {
-            const date = new Date(d.fecha + "T00:00:00");
-            const day = date.getDate();
-            matchW = (day >= weekRanges[currentWeek].start && day <= weekRanges[currentWeek].end);
+            const day = new Date(d.fecha + "T00:00:00").getDate();
+            matchWeek = (day >= weekRanges[currentWeek].start && day <= weekRanges[currentWeek].end);
         }
 
         const totalOut = (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0));
         const isDebt = totalOut > parseInt(d.devueltos || 0);
         const isDamaged = isDamagedRecord(d);
-        const isLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" ||
-            (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
+        const isLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true";
 
         let matchMode = true;
         if (filterMode === 'lab') matchMode = isLab;
@@ -200,7 +166,7 @@ function renderAll() {
         else if (filterMode === 'debt') matchMode = isDebt && !isDamaged;
         else if (filterMode === 'damaged') matchMode = isDamaged;
 
-        return matchS && matchC && matchW && matchMode;
+        return matchSearch && matchCourse && matchWeek && matchMode;
     });
 
     const tableBody = document.getElementById('tableBody');
@@ -210,6 +176,8 @@ function renderAll() {
     if (finalFiltered.length === 0) {
         if (tableEl) tableEl.style.display = 'none';
         if (emptyState) emptyState.style.display = 'block';
+        const contadorEl = document.getElementById('recordCount');
+        if (contadorEl) contadorEl.textContent = '0 registros';
     } else {
         if (tableEl) tableEl.style.display = 'table';
         if (emptyState) emptyState.style.display = 'none';
@@ -228,8 +196,7 @@ function renderAll() {
             const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
             const isOK = totalOut === parseInt(r.devueltos);
             const isDamaged = isDamagedRecord(r);
-            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" ||
-                (r.asignatura + r.observacion).toLowerCase().includes("laboratorio");
+            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
 
             if (r.fecha !== lastDay) {
                 lastDay = r.fecha;
@@ -238,12 +205,11 @@ function renderAll() {
                 const fechaFmt = r.fecha.split('-').reverse().slice(0, 2).join('/');
                 const registrosDia = sorted.filter(x => x.fecha === r.fecha);
                 const labsDia = registrosDia.filter(x => x.uso_laboratorio === true || x.uso_laboratorio === "TRUE" || x.uso_laboratorio === "true").length;
-                const labBadge = labsDia > 0 ?
-                    `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>` : '';
+                const labBadge = labsDia > 0 ? `<span class="ms-2" style="background:#ede7ff;color:#6f42c1;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:800;">🟣 LAB ×${labsDia}</span>` : '';
                 rows.push(`<tr class="day-separator-row">
                     <td colspan="10" style="background:#4a4a4a;border-left:5px solid #222;border-top:1px solid #333;border-bottom:1px solid #333;padding:8px 16px;font-size:0.78rem;font-weight:800;color:#f0f0f0;letter-spacing:0.8px;text-transform:uppercase;">
                         <span style="display:inline-flex;align-items:center;gap:8px;">
-                            <span style="background:#222;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;">📅 ${diaNombre}</span>
+                            <span style="background:#222;color:white;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:900;">📅 ${diaNombre}</span>
                             <span style="color:#f0f0f0;font-weight:900;">${fechaFmt}</span>
                             <span style="background:#666;color:#f0f0f0;border:1px solid #555;padding:2px 9px;border-radius:20px;font-size:0.68rem;font-weight:700;">${registrosDia.length} registro${registrosDia.length !== 1 ? 's' : ''}</span>
                             ${labBadge}
@@ -253,19 +219,17 @@ function renderAll() {
             }
 
             let rowClass = isDamaged ? "row-damaged" : (isLab ? "row-lab" : (!isOK ? "row-pending" : ""));
-            const isPendienteObs = (r.observacion || "").toLowerCase() === "pendiente";
-            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : isPendienteObs ? 'PENDIENTE' : 'ACTIVO';
-            let estadoColor = isOK ? '#198754' : isPendienteObs ? '#f9a825' : '#ffc107';
-            let estadoTextColor = isOK ? 'white' : isPendienteObs ? '#fff' : '#444';
+            let estadoTexto = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
+            let estadoColor = isOK ? '#198754' : '#f9a825';
+            let estadoTextColor = isOK ? 'white' : '#fff';
 
             if (isDamaged) {
-                estadoTexto = r.observacion && r.observacion !== "Pendiente" ? r.observacion : "CON DAÑO";
+                estadoTexto = r.observacion && r.observacion !== "Pendiente" ? r.observacion.substring(0, 20) : "CON DAÑO";
                 estadoColor = 'var(--danger-red)';
                 estadoTextColor = 'white';
             }
 
-            const badgeLab = isLab ?
-                `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#6f42c1,#9b59b6);color:white;box-shadow:0 2px 6px rgba(111,66,193,0.4);">🟣 LABORATORIO</span>` : '';
+            const badgeLab = isLab ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#6f42c1,#9b59b6);color:white;">🟣 LABORATORIO</span>` : '';
             const badgeEstado = `<span class="badge badge-status" style="background:${estadoColor};color:${estadoTextColor}">${estadoTexto}</span>`;
 
             rows.push(`<tr class="${rowClass}">
@@ -277,11 +241,7 @@ function renderAll() {
                 <td>${r.chromebooks}</td>
                 <td class="text-danger fw-bold">${r.reemplazo}</td>
                 <td class="text-success fw-bold">${r.devueltos}</td>
-                <td>
-                    ${badgeLab}
-                    ${(parseInt(r.reemplazo || 0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#b71c1c,#e53935);color:white;box-shadow:0 2px 5px rgba(183,28,28,0.35);">📦 ${r.nro_equipo_reemplazo}</span>` : ''}
-                    ${badgeEstado}
-                </td>
+                <td>${badgeLab} ${(parseInt(r.reemplazo || 0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:#b71c1c;color:white;">📦 ${r.nro_equipo_reemplazo}</span>` : ''} ${badgeEstado}</td>
                 <td><div class="d-flex justify-content-center gap-1">
                     <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
@@ -302,8 +262,6 @@ function renderAll() {
     if (banner) {
         if (currentDebts.length > 0) {
             banner.style.display = 'flex';
-            banner.style.alignItems = 'center';
-            banner.style.justifyContent = 'space-between';
             document.getElementById('debtText').innerText = `⚠️ Franco, tienes ${currentDebts.length} préstamos pendientes en ${mNames[viewDate.getMonth()]}.`;
         } else banner.style.display = 'none';
     }
@@ -316,12 +274,12 @@ function updateKPIs(base) {
     function animateKPI(id, val) {
         const el = document.getElementById(id);
         if (!el) return;
-        el.style.transition = 'opacity 0.2s';
         el.style.opacity = '0';
         setTimeout(() => {
             el.innerText = val;
             el.style.opacity = '1';
-        }, 200);
+        }, 100);
+        setTimeout(() => { if (el) el.style.opacity = '1'; }, 200);
     }
 
     function setBar(id, val, max, color) {
@@ -337,13 +295,7 @@ function updateKPIs(base) {
         return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
-    const mAntDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
-    const mesAnterior = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === mAntDate.getMonth() && date.getFullYear() === mAntDate.getFullYear();
-    });
-
-    const labMes = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" || (d.asignatura + d.observacion).toLowerCase().includes("laboratorio")).length;
+    const labMes = mesCompleto.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
     const reempMes = mesCompleto.filter(d => parseInt(d.reemplazo || 0) > 0).length;
     const dmgMes = mesCompleto.filter(d => isDamagedRecord(d)).length;
     const okMes = mesCompleto.filter(d => {
@@ -369,9 +321,9 @@ function updateKPIs(base) {
 
     renderAlertasPanel(mesCompleto);
 
-    // KPI semana - usando la nueva lógica de semanas
+    // KPI Semana
     const weekRanges = getWeekRanges(viewDate.getFullYear(), viewDate.getMonth());
-    let prestSemana, labelSemTxt;
+    let prestSemana = 0, labelSemTxt = "lun – vie";
 
     if (currentWeek === 0) {
         const hoyKpi = new Date();
@@ -394,41 +346,27 @@ function updateKPIs(base) {
             return day >= range.start && day <= range.end;
         }).length;
         labelSemTxt = `días ${range.start}–${range.end}`;
-    } else {
-        prestSemana = 0;
-        labelSemTxt = `semana ${currentWeek}`;
     }
 
     animateKPI('kpi-semana', prestSemana);
     const labelSemana = document.getElementById('kpiSemanaLabel');
-    const glowSemana = document.getElementById('kpiSemanaGlow');
     if (labelSemana) labelSemana.textContent = labelSemTxt;
-    if (glowSemana) glowSemana.style.display = prestSemana > 0 ? 'block' : 'none';
 
     // Stock
-    const enUsoChr = base.filter(d => {
+    const enUso = mesCompleto.filter(d => {
         const chr = parseInt(d.chromebooks || 0);
-        const dev = parseInt(d.devueltos || 0);
         const ree = parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
         const isDmg = isDamagedRecord(d);
         return (chr + ree) > dev && !isDmg;
     }).reduce((sum, d) => {
         const chr = parseInt(d.chromebooks || 0);
-        const dev = parseInt(d.devueltos || 0);
         const ree = parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
         const pendiente = Math.max(0, chr + ree - dev);
         return sum + Math.min(chr, pendiente);
     }, 0);
 
-    const enUsoRee = base.filter(d => {
-        const ree = parseInt(d.reemplazo || 0);
-        const dev = parseInt(d.devueltos || 0);
-        const chr = parseInt(d.chromebooks || 0);
-        const isDmg = isDamagedRecord(d);
-        return ree > 0 && (chr + ree) > dev && !isDmg;
-    }).reduce((sum, d) => sum + parseInt(d.reemplazo || 0), 0);
-
-    const enUso = enUsoChr;
     const disponible = Math.max(0, STOCK_MAXIMO - enUso);
     const pct = Math.min(100, Math.round((enUso / STOCK_MAXIMO) * 100));
 
@@ -441,8 +379,6 @@ function updateKPIs(base) {
     const warningEl = document.getElementById('stock-warning');
     const enUsoEl = document.getElementById('stock-en-uso');
     const disponibleEl = document.getElementById('stock-disponible');
-    const totalEl = document.getElementById('stock-total');
-    const totalLabelEl = document.getElementById('stock-total-label');
 
     if (barEl) {
         barEl.style.width = pct + '%';
@@ -450,10 +386,8 @@ function updateKPIs(base) {
     }
     if (labelEl) labelEl.textContent = enUso > 0 ? `${pct}% en uso` : '';
     if (warningEl) warningEl.style.display = pct >= 85 ? 'block' : 'none';
-    if (enUsoEl) enUsoEl.textContent = enUso + (enUsoRee > 0 ? ` (+${enUsoRee} reemplazo)` : '');
+    if (enUsoEl) enUsoEl.textContent = enUso;
     if (disponibleEl) disponibleEl.textContent = disponible;
-    if (totalEl) totalEl.textContent = `${STOCK_MAXIMO} + ${STOCK_REEMPLAZO}`;
-    if (totalLabelEl) totalLabelEl.textContent = `${STOCK_MAXIMO} Chromebooks · ${STOCK_REEMPLAZO} Reemplazos`;
 }
 
 function updateCharts(base) {
@@ -485,34 +419,10 @@ function updateCharts(base) {
                 indexAxis: 'y',
                 maintainAspectRatio: false,
                 responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        enabled: true
-                    }
-                },
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
                 scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1,
-                            precision: 0
-                        },
-                        title: {
-                            display: true,
-                            text: 'Cantidad de Préstamos'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            autoSkip: false,
-                            font: {
-                                size: 11
-                            }
-                        }
-                    }
+                    x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, title: { display: true, text: 'Cantidad de Préstamos' } },
+                    y: { ticks: { autoSkip: false, font: { size: 11 } } }
                 }
             }
         });
@@ -538,32 +448,18 @@ function updateCharts(base) {
             options: {
                 maintainAspectRatio: false,
                 responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        enabled: true
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                }
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
         });
     }
 }
 
 function renderAnualChart() {
-    const usageTotal = new Array(12).fill(0),
-        replacements = new Array(12).fill(0),
-        damaged = new Array(12).fill(0),
-        labs = new Array(12).fill(0);
+    const usageTotal = new Array(12).fill(0);
+    const replacements = new Array(12).fill(0);
+    const damaged = new Array(12).fill(0);
+    const labs = new Array(12).fill(0);
 
     db.forEach(d => {
         const dt = new Date(d.fecha + "T00:00:00");
@@ -572,9 +468,7 @@ function renderAnualChart() {
             usageTotal[m]++;
             if (parseInt(d.reemplazo || 0) > 0) replacements[m]++;
             if (isDamagedRecord(d)) damaged[m]++;
-            const esLab = d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true" ||
-                (d.asignatura + d.observacion).toLowerCase().includes("laboratorio");
-            if (esLab) labs[m]++;
+            if (d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") labs[m]++;
         }
     });
 
@@ -585,62 +479,24 @@ function renderAnualChart() {
             type: 'line',
             data: {
                 labels: mNames.map(m => m.slice(0, 3)),
-                datasets: [{
-                        label: 'Uso Total',
-                        data: usageTotal,
-                        borderColor: '#0d6832',
-                        backgroundColor: '#0d6832',
-                        tension: 0.3,
-                        fill: false,
-                        borderWidth: 3
-                    },
-                    {
-                        label: 'Uso Laboratorio',
-                        data: labs,
-                        borderColor: '#6f42c1',
-                        backgroundColor: '#6f42c1',
-                        tension: 0.3,
-                        fill: false,
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Uso Reemplazos',
-                        data: replacements,
-                        borderColor: '#f39c12',
-                        backgroundColor: '#f39c12',
-                        tension: 0.3,
-                        fill: false,
-                        borderDash: [5, 5]
-                    },
-                    {
-                        label: 'Equipos Dañados',
-                        data: damaged,
-                        borderColor: '#dc3545',
-                        backgroundColor: '#dc3545',
-                        tension: 0.3,
-                        fill: false,
-                        borderWidth: 2
-                    }
+                datasets: [
+                    { label: 'Uso Total', data: usageTotal, borderColor: '#0d6832', backgroundColor: '#0d6832', tension: 0.3, fill: false, borderWidth: 3 },
+                    { label: 'Uso Laboratorio', data: labs, borderColor: '#6f42c1', backgroundColor: '#6f42c1', tension: 0.3, fill: false, borderWidth: 2 },
+                    { label: 'Uso Reemplazos', data: replacements, borderColor: '#f39c12', backgroundColor: '#f39c12', tension: 0.3, fill: false, borderDash: [5, 5] },
+                    { label: 'Equipos Dañados', data: damaged, borderColor: '#dc3545', backgroundColor: '#dc3545', tension: 0.3, fill: false, borderWidth: 2 }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+                plugins: { legend: { position: 'bottom' } },
+                scales: { y: { beginAtZero: true } }
             }
         });
     }
 }
 
+// ==================== NAVEGACIÓN Y FILTROS ====================
 function moveMonth(n) {
     viewDate.setMonth(viewDate.getMonth() + n);
     renderAll();
@@ -660,18 +516,22 @@ function setFilterMode(m) {
 function resetApp() {
     filterMode = 'all';
     currentWeek = 0;
-    document.getElementById('searchBox').value = '';
-    document.getElementById('courseSelect').value = '';
+    const searchBox = document.getElementById('searchBox');
+    const courseSelect = document.getElementById('courseSelect');
+    if (searchBox) searchBox.value = '';
+    if (courseSelect) courseSelect.value = '';
     document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
     renderAll();
 }
 
-function irASemanActual() {
+function irASemanaActual() {
     const hoy = new Date();
     viewDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     filterMode = 'all';
-    document.getElementById('searchBox').value = '';
-    document.getElementById('courseSelect').value = '';
+    const searchBox = document.getElementById('searchBox');
+    const courseSelect = document.getElementById('courseSelect');
+    if (searchBox) searchBox.value = '';
+    if (courseSelect) courseSelect.value = '';
     const dia = hoy.getDate();
     const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
     currentWeek = semana;
@@ -679,10 +539,7 @@ function irASemanActual() {
     renderAll();
     setTimeout(() => {
         const tabla = document.getElementById('mainTable');
-        if (tabla) tabla.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-        });
+        if (tabla) tabla.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
 }
 
@@ -702,9 +559,7 @@ function showPage(page) {
         btnStat.style.color = 'white';
         btnStat.style.border = '1.5px solid #0d6832';
         setTimeout(() => {
-            Object.values(charts).forEach(c => {
-                if (c) c.resize();
-            });
+            Object.values(charts).forEach(c => { if (c) c.resize(); });
         }, 50);
     } else {
         pageStat.style.display = 'none';
@@ -718,6 +573,7 @@ function showPage(page) {
     }
 }
 
+// ==================== MODAL Y WIZARD ====================
 function toggleNroEquipo() {
     const ree = parseInt(document.getElementById('fRee').value || 0);
     const wrapper = document.getElementById('nroEquipoWrapper');
@@ -732,1157 +588,46 @@ function onEstadoDevChange() {
 }
 
 function openModal() {
-    document.getElementById('resForm').reset();
-    document.getElementById('fId').value = '';
-    document.getElementById('resForm').classList.remove('was-validated');
+    const form = document.getElementById('resForm');
+    if (form) form.reset();
+    const fId = document.getElementById('fId');
+    if (fId) fId.value = '';
+    if (form) form.classList.remove('was-validated');
     const hoyStr = new Date().toISOString().split('T')[0];
-    document.getElementById('fFecha').value = hoyStr;
-    document.getElementById('fLab').checked = false;
+    const fFecha = document.getElementById('fFecha');
+    if (fFecha) fFecha.value = hoyStr;
+    const fLab = document.getElementById('fLab');
+    if (fLab) fLab.checked = false;
     document.querySelectorAll('input[name="fEstadoDev"]').forEach(r => r.checked = false);
     document.querySelectorAll('input[name="fNroEquipo"]').forEach(r => r.checked = false);
     const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
     if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
     const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
     if (nroEquipoWrapper) nroEquipoWrapper.style.display = 'none';
-    if (document.getElementById('fTipoDanio')) document.getElementById('fTipoDanio').value = '';
+    const fTipoDanio = document.getElementById('fTipoDanio');
+    if (fTipoDanio) fTipoDanio.value = '';
     loadDraft();
     fillDocentes();
     wizardGoTo(1);
     new bootstrap.Modal(document.getElementById('resModal')).show();
 }
 
-async function saveData() {
-    const form = document.getElementById('resForm');
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
-        Swal.fire('Atención', 'Por favor complete todos los campos requeridos', 'warning');
-        return;
-    }
-
-    document.getElementById('loading').style.display = 'flex';
-    const esLab = document.getElementById('fLab').checked;
-
-    const estadoDevSeleccionado = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
-    let obsValue = '';
-    if (estadoDevSeleccionado === 'ok') {
-        obsValue = 'Sin novedad';
-    } else if (estadoDevSeleccionado === 'pendiente') {
-        obsValue = 'Pendiente';
-    } else if (estadoDevSeleccionado === 'danio') {
-        const tipoDanio = (document.getElementById('fTipoDanio')?.value || '').trim();
-        obsValue = tipoDanio || 'Dañado';
-    } else {
-        obsValue = document.getElementById('fObs')?.value || 'Pendiente';
-    }
-
-    const estado = calcEstado(
-        document.getElementById('fChr').value,
-        document.getElementById('fRee').value,
-        document.getElementById('fDev').value,
-        obsValue,
-        esLab
-    );
-    const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0, 10) : '';
-    const resp = 'Franco San Martín';
-    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
-    const payload = {
-        action: document.getElementById('fId').value ? 'update' : 'create',
-        id: document.getElementById('fId').value,
-        fecha: document.getElementById('fFecha').value,
-        hora: document.getElementById('fHora').value,
-        curso: document.getElementById('fCurso').value,
-        profesor: document.getElementById('fProfesor').value,
-        asignatura: document.getElementById('fAsignatura').value,
-        chromebooks: document.getElementById('fChr').value,
-        reemplazo: document.getElementById('fRee').value,
-        devueltos: document.getElementById('fDev').value,
-        observacion: obsValue,
-        nro_equipo_reemplazo: nroEquipo,
-        uso_laboratorio: esLab,
-        estado_operativo: estado,
-        fecha_cierre: fechaCierre,
-        responsable_cierre: resp
-    };
-    try {
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-        localStorage.removeItem('franco_draft');
-        bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
-        const accion = payload.action === 'create' ? 'creado' : 'actualizado';
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true
-        });
-        Toast.fire({
-            icon: 'success',
-            title: `Registro ${accion} correctamente`
-        });
-        load();
-    } catch (e) {
-        Swal.fire('Error', 'No se pudo guardar el registro', 'error');
-        document.getElementById('loading').style.display = 'none';
-    }
-}
-
-const STOCK_MAXIMO = 115;
-const STOCK_REEMPLAZO = 4;
-
-function validateCounts(autoFill) {
+function validateCounts() {
     const chr = parseInt(document.getElementById('fChr').value || 0);
     const ree = parseInt(document.getElementById('fRee').value || 0);
     const dev = parseInt(document.getElementById('fDev').value || 0);
     const msg = document.getElementById('valMsg');
-    const msgStock = document.getElementById('valMsgStock');
     const devInput = document.getElementById('fDev');
 
-    if (autoFill && dev === 0 && (chr + ree) > 0) {
-        devInput.value = chr + ree;
-    }
-
-    const devFinal = parseInt(devInput.value || 0);
-    if (devFinal !== (chr + ree)) {
-        msg.style.display = 'block';
-        devInput.classList.add('val-warning');
+    if (dev !== (chr + ree)) {
+        if (msg) msg.style.display = 'block';
+        if (devInput) devInput.classList.add('val-warning');
     } else {
-        msg.style.display = 'none';
-        devInput.classList.remove('val-warning');
+        if (msg) msg.style.display = 'none';
+        if (devInput) devInput.classList.remove('val-warning');
     }
-
-    const total = chr + ree;
-    if (msgStock) {
-        if (total > STOCK_MAXIMO) {
-            msgStock.style.display = 'block';
-            msgStock.textContent = `⚠️ Supera el stock disponible (máx. ${STOCK_MAXIMO} equipos)`;
-        } else {
-            msgStock.style.display = 'none';
-        }
-    }
-
     saveDraft();
 }
-
-function editItem(id) {
-    const r = db.find(x => x.id.toString() === id.toString());
-    document.getElementById('fId').value = r.id;
-    document.getElementById('fFecha').value = r.fecha;
-    document.getElementById('fHora').value = r.hora;
-    document.getElementById('fCurso').value = r.curso;
-    fillDocentes();
-    document.getElementById('fProfesor').value = r.profesor;
-    document.getElementById('fAsignatura').value = r.asignatura;
-    document.getElementById('fChr').value = r.chromebooks;
-    document.getElementById('fRee').value = r.reemplazo;
-    document.getElementById('fDev').value = r.devueltos;
-    document.getElementById('fObs').value = r.observacion;
-
-    const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true" ||
-        (r.observacion || "").toLowerCase().includes("laboratorio");
-    document.getElementById('fLab').checked = labVal;
-
-    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
-    const ree = parseInt(r.reemplazo || 0);
-    if (nroEquipoWrapper) nroEquipoWrapper.style.display = ree > 0 ? 'block' : 'none';
-    document.querySelectorAll('input[name="fNroEquipo"]').forEach(rb => rb.checked = false);
-    if (r.nro_equipo_reemplazo) {
-        const rbEq = document.querySelector(`input[name="fNroEquipo"][value="${r.nro_equipo_reemplazo}"]`);
-        if (rbEq) rbEq.checked = true;
-    }
-
-    const obs = (r.observacion || "").toLowerCase();
-    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
-    document.querySelectorAll('input[name="fEstadoDev"]').forEach(rb => rb.checked = false);
-
-    const isDamaged = isDamagedRecord(r);
-
-    if (isDamaged) {
-        const edDanio = document.getElementById('edDanio');
-        if (edDanio) edDanio.checked = true;
-        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'block';
-        const fTipoDanio = document.getElementById('fTipoDanio');
-        if (fTipoDanio) fTipoDanio.value = r.observacion;
-    } else if (obs === 'sin novedad' || obs === '' || obs === 'ok') {
-        const edOk = document.getElementById('edOk');
-        if (edOk) edOk.checked = true;
-        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
-    } else if (obs === 'pendiente') {
-        const edPend = document.getElementById('edPendiente');
-        if (edPend) edPend.checked = true;
-        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
-    }
-
-    validateCounts();
-    wizardGoTo(2);
-    new bootstrap.Modal(document.getElementById('resModal')).show();
-}
-
-function saveDraft() {
-    if (document.getElementById('fId').value !== "") return;
-    const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
-    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
-    const draft = {
-        fecha: document.getElementById('fFecha').value,
-        hora: document.getElementById('fHora').value,
-        curso: document.getElementById('fCurso').value,
-        profesor: document.getElementById('fProfesor').value,
-        asignatura: document.getElementById('fAsignatura').value,
-        obs: document.getElementById('fObs').value,
-        lab: document.getElementById('fLab').checked,
-        nroEquipo: nroEquipo,
-        estadoDev: estadoDev,
-        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
-    };
-    localStorage.setItem('franco_draft', JSON.stringify(draft));
-}
-
-function loadDraft() {
-    const saved = localStorage.getItem('franco_draft');
-    if (saved) {
-        const d = JSON.parse(saved);
-        document.getElementById('fFecha').value = d.fecha;
-        document.getElementById('fHora').value = d.hora;
-        document.getElementById('fCurso').value = d.curso;
-        document.getElementById('fProfesor').value = d.profesor;
-        document.getElementById('fAsignatura').value = d.asignatura;
-        document.getElementById('fObs').value = d.obs;
-        if (d.lab !== undefined) document.getElementById('fLab').checked = d.lab;
-        if (d.nroEquipo) {
-            const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
-            if (rb) rb.checked = true;
-            toggleNroEquipo();
-        }
-        if (d.estadoDev) {
-            const rb = document.querySelector(`input[name="fEstadoDev"][value="${d.estadoDev}"]`);
-            if (rb) {
-                rb.checked = true;
-                onEstadoDevChange();
-            }
-        }
-        if (d.tipoDanio && document.getElementById('fTipoDanio')) {
-            document.getElementById('fTipoDanio').value = d.tipoDanio;
-        }
-    }
-}
-
-async function deleteItem(id) {
-    const result = await Swal.fire({
-        title: '¿Estás seguro?',
-        text: "Esta acción no se puede deshacer.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
-    });
-
-    if (result.isConfirmed) {
-        document.getElementById('loading').style.display = 'flex';
-        try {
-            await fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'delete',
-                    id: id
-                })
-            });
-            load();
-            Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-        } catch (e) {
-            Swal.fire('Error', 'No se pudo eliminar.', 'error');
-            document.getElementById('loading').style.display = 'none';
-        }
-    }
-}
-
-function generatePDF() {
-    const {
-        jsPDF
-    } = window.jspdf;
-    const doc = new jsPDF();
-    const mesActual = mNames[viewDate.getMonth()];
-    const anioActual = viewDate.getFullYear();
-    const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
-    const fechaEmision = new Date().toLocaleDateString('es-CL');
-
-    const mesData = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = logoUrl;
-
-    const buildPDF = () => {
-        const pageStats = document.getElementById('pageStats');
-        const pageReg = document.getElementById('pageRegistros');
-
-        const restorePages = () => {
-            if (pageStats) pageStats.style.display = 'none';
-            if (pageReg) pageReg.style.display = 'block';
-            const btnStat = document.getElementById('btnPageStats');
-            const btnReg = document.getElementById('btnPageRegistros');
-            if (btnStat) {
-                btnStat.style.background = 'white';
-                btnStat.style.color = '#555';
-                btnStat.style.border = '1.5px solid #ddd';
-            }
-            if (btnReg) {
-                btnReg.style.background = '#0d6832';
-                btnReg.style.color = 'white';
-                btnReg.style.border = '1.5px solid #0d6832';
-            }
-        };
-
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 210, 42, 'F');
-        try {
-            doc.addImage(img, 'PNG', 170, 4, 22, 28);
-        } catch (e) {}
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20);
-        doc.setFont("helvetica", "bold");
-        doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 20);
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 30);
-        doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 37);
-
-        const total = mesData.length;
-        const ok = mesData.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-        const dmg = mesData.filter(d => isDamagedRecord(d)).length;
-        const activos = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
-        const labs = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-        const reemp = mesData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-        const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
-
-        const kpis = [{
-                label: 'Total Préstamos',
-                value: total,
-                color: [13, 104, 50]
-            },
-            {
-                label: 'Devoluciones OK',
-                value: ok,
-                color: [25, 135, 84]
-            },
-            {
-                label: 'Pendientes',
-                value: activos,
-                color: [255, 193, 7]
-            },
-            {
-                label: 'Con Daños',
-                value: dmg,
-                color: [211, 47, 47]
-            },
-            {
-                label: 'Uso Laboratorio',
-                value: labs,
-                color: [111, 66, 193]
-            },
-            {
-                label: 'Con Reemplazos',
-                value: reemp,
-                color: [220, 53, 69]
-            },
-        ];
-
-        const kpiW = 27,
-            kpiH = 20,
-            kpiY0 = 50;
-        const kpiX0 = 14;
-        kpis.forEach((k, i) => {
-            const x = kpiX0 + i * (kpiW + 4);
-            doc.setFillColor(...k.color);
-            doc.roundedRect(x, kpiY0, kpiW, kpiH, 2, 2, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(13);
-            doc.setFont("helvetica", "bold");
-            doc.text(String(k.value), x + kpiW / 2, kpiY0 + 9, {
-                align: 'center'
-            });
-            doc.setFontSize(5.5);
-            doc.setFont("helvetica", "normal");
-            doc.text(k.label.toUpperCase(), x + kpiW / 2, kpiY0 + 16, {
-                align: 'center'
-            });
-        });
-
-        doc.setFillColor(0, 51, 102);
-        doc.roundedRect(14, 77, 182, 10, 2, 2, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text(`TASA DE RETORNO DEL MES: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 84, {
-            align: 'center'
-        });
-
-        const chartCanvas = document.getElementById('chartStatus');
-        try {
-            const chartImg = chartCanvas.toDataURL("image/png", 1.0);
-            doc.setTextColor(44, 62, 80);
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "bold");
-            doc.text("DISTRIBUCIÓN DE ESTADO", 157, 93, {
-                align: 'center'
-            });
-            doc.addImage(chartImg, 'PNG', 130, 95, 66, 48);
-        } catch (e) {}
-
-        const docentesMap = {};
-        mesData.forEach(d => {
-            const k = d.profesor ? d.profesor.trim() : "—";
-            if (!docentesMap[k]) docentesMap[k] = {
-                total: 0,
-                ok: 0,
-                reemp: 0,
-                lab: 0,
-                dmg: 0
-            };
-            docentesMap[k].total++;
-            if ((parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
-            if (parseInt(d.reemplazo || 0) > 0) docentesMap[k].reemp++;
-            if (d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
-            if (isDamagedRecord(d)) docentesMap[k].dmg++;
-        });
-
-        const todosDocentes = Object.entries(docentesMap)
-            .sort((a, b) => b[1].total - a[1].total);
-
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "bold");
-        doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 93);
-
-        doc.autoTable({
-            startY: 97,
-            head: [
-                ['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']
-            ],
-            body: todosDocentes.map(([nombre, v], i) => [
-                i + 1,
-                nombre,
-                v.total,
-                v.ok,
-                v.reemp > 0 ? `Sí (${v.reemp})` : '—',
-                v.lab > 0 ? `Sí (${v.lab})` : '—',
-                v.dmg > 0 ? v.dmg : '—'
-            ]),
-            headStyles: {
-                fillColor: [0, 51, 102],
-                fontSize: 8,
-                fontStyle: 'bold',
-                textColor: 255
-            },
-            bodyStyles: {
-                fontSize: 8
-            },
-            alternateRowStyles: {
-                fillColor: [245, 248, 255]
-            },
-            tableWidth: 'auto',
-            columnStyles: {
-                0: {
-                    cellWidth: 10,
-                    halign: 'center'
-                },
-                1: {
-                    cellWidth: 'auto'
-                },
-                2: {
-                    cellWidth: 24,
-                    halign: 'center'
-                },
-                3: {
-                    cellWidth: 22,
-                    halign: 'center'
-                },
-                4: {
-                    cellWidth: 26,
-                    halign: 'center'
-                },
-                5: {
-                    cellWidth: 22,
-                    halign: 'center'
-                },
-                6: {
-                    cellWidth: 18,
-                    halign: 'center'
-                }
-            },
-            margin: {
-                left: 14,
-                right: 14
-            },
-            didParseCell: (data) => {
-                if (data.section === 'body' && data.column.index === 6) {
-                    if (data.cell.raw !== '—') data.cell.styles.textColor = [211, 47, 47];
-                }
-                if (data.section === 'body' && data.column.index === 2) {
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = [0, 51, 102];
-                }
-            }
-        });
-
-        doc.addPage();
-
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 210, 22, 'F');
-        try {
-            doc.addImage(img, 'PNG', 184, 1, 14, 18);
-        } catch (e) {}
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text("DASHBOARD - ANALISIS VISUAL", 14, 10);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.text(`${mesActual.toUpperCase()} ${anioActual}  |  ${total} prestamos  |  Tasa retorno: ${tasa}%  |  ${todosDocentes.length} docentes`, 14, 17);
-
-        const cerrados2 = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) === parseInt(d.devueltos || 0) && parseInt(d.devueltos || 0) > 0).length;
-        const activos2 = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
-        const danados2 = mesData.filter(d => isDamagedRecord(d)).length;
-        const labs2 = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-        const reemp2 = mesData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-
-        const S_X = 14,
-            S_Y = 26,
-            S_W = 88,
-            S_H = 62;
-        doc.setFillColor(248, 249, 250);
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(S_X, S_Y, S_W, S_H, 2, 2, 'FD');
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "bold");
-        doc.text("ESTADO DE EQUIPOS DEL MES", S_X + S_W / 2, S_Y + 7, {
-            align: 'center'
-        });
-
-        const estadoItems = [{
-                label: 'Entregados',
-                val: cerrados2,
-                color: [25, 135, 84]
-            },
-            {
-                label: 'Pendientes',
-                val: activos2,
-                color: [255, 193, 7]
-            },
-            {
-                label: 'Danados',
-                val: danados2,
-                color: [211, 47, 47]
-            },
-            {
-                label: 'Laboratorio',
-                val: labs2,
-                color: [111, 66, 193]
-            },
-            {
-                label: 'Reemplazos',
-                val: reemp2,
-                color: [220, 53, 69]
-            },
-        ];
-        const maxVal = Math.max(...estadoItems.map(e => e.val), 1);
-        const BAR_X = S_X + 30,
-            BAR_MAX_W = S_W - 36,
-            BAR_H = 5,
-            BAR_GAP = 8;
-        estadoItems.forEach((item, i) => {
-            const y = S_Y + 14 + i * BAR_GAP;
-            doc.setFontSize(6);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(80, 80, 80);
-            doc.text(item.label, S_X + 28, y + 4, {
-                align: 'right'
-            });
-            doc.setFillColor(230, 230, 230);
-            doc.roundedRect(BAR_X, y, BAR_MAX_W, BAR_H, 1, 1, 'F');
-            const barW = item.val > 0 ? Math.max(3, (item.val / maxVal) * BAR_MAX_W) : 0;
-            doc.setFillColor(...item.color);
-            if (barW > 0) doc.roundedRect(BAR_X, y, barW, BAR_H, 1, 1, 'F');
-            doc.setFontSize(6);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(...item.color);
-            doc.text(String(item.val), BAR_X + BAR_MAX_W + 2, y + 4);
-        });
-
-        const T_X = 108,
-            T_Y = 26,
-            T_W = 88,
-            T_H = 62;
-        doc.setFillColor(248, 249, 250);
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(T_X, T_Y, T_W, T_H, 2, 2, 'FD');
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "bold");
-        doc.text("PRESTAMOS POR MES - 2026", T_X + T_W / 2, T_Y + 7, {
-            align: 'center'
-        });
-
-        const porMes = new Array(12).fill(0);
-        db.forEach(d => {
-            const dt = new Date(d.fecha + "T00:00:00");
-            if (dt.getFullYear() === 2026) porMes[dt.getMonth()]++;
-        });
-        const maxMes = Math.max(...porMes, 1);
-        const G_X = T_X + 6,
-            G_Y = T_Y + 13,
-            G_W = T_W - 12,
-            G_H = 36;
-        const mAbr = ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.2);
-        doc.line(G_X, G_Y, G_X, G_Y + G_H);
-        doc.line(G_X, G_Y + G_H, G_X + G_W, G_Y + G_H);
-
-        const pts = porMes.map((v, i) => ({
-            x: G_X + (i / 11) * G_W,
-            y: G_Y + G_H - (v / maxMes) * G_H
-        }));
-        doc.setDrawColor(13, 104, 50);
-        doc.setLineWidth(0.8);
-        for (let i = 1; i < pts.length; i++) doc.line(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
-        doc.setFillColor(13, 104, 50);
-        pts.forEach(p => doc.circle(p.x, p.y, 0.8, 'F'));
-        doc.setFontSize(5);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(120, 120, 120);
-        mAbr.forEach((m, i) => {
-            const x = G_X + (i / 11) * G_W;
-            doc.text(m, x, G_Y + G_H + 4, {
-                align: 'center'
-            });
-            if (porMes[i] > 0) {
-                doc.setTextColor(13, 104, 50);
-                doc.setFont("helvetica", "bold");
-                doc.text(String(porMes[i]), x, pts[i].y - 2, {
-                    align: 'center'
-                });
-                doc.setTextColor(120, 120, 120);
-                doc.setFont("helvetica", "normal");
-            }
-        });
-
-        const D_X = 14,
-            D_Y = S_Y + S_H + 6,
-            D_W = 182;
-        const barDocH = 5.2,
-            barDocGap = 1.8;
-        const maxDocVal = Math.max(...todosDocentes.map(([, v]) => v.total), 1);
-        const D_H = 12 + todosDocentes.length * (barDocH + barDocGap) + 6;
-
-        doc.setFillColor(248, 249, 250);
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(D_X, D_Y, D_W, D_H, 2, 2, 'FD');
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "bold");
-        doc.text("PRESTAMOS POR DOCENTE", D_X + D_W / 2, D_Y + 6, {
-            align: 'center'
-        });
-
-        const LABEL_W = 46;
-        const BD_X = D_X + LABEL_W + 2,
-            BD_MAX = D_W - LABEL_W - 16;
-        todosDocentes.forEach(([nombre, v], i) => {
-            const y = D_Y + 11 + i * (barDocH + barDocGap);
-            const nomCorto = nombre.length > 22 ? nombre.slice(0, 21) + '.' : nombre;
-            doc.setFontSize(5.2);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(60, 60, 60);
-            doc.text(nomCorto, D_X + LABEL_W, y + barDocH - 1, {
-                align: 'right'
-            });
-            doc.setFillColor(225, 235, 225);
-            doc.roundedRect(BD_X, y, BD_MAX, barDocH, 0.8, 0.8, 'F');
-            const bw = Math.max(2, (v.total / maxDocVal) * BD_MAX);
-            doc.setFillColor(13, 104, 50);
-            doc.roundedRect(BD_X, y, bw, barDocH, 0.8, 0.8, 'F');
-            doc.setFontSize(5.2);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(13, 104, 50);
-            doc.text(String(v.total), BD_X + bw + 1.5, y + barDocH - 1);
-        });
-
-        const TABLE_Y2 = D_Y + D_H + 6;
-        const semanas = [1, 2, 3, 4];
-        const semanaRows = semanas.map(s => {
-            const dInicio = (s - 1) * 7 + 1,
-                dFin = s * 7;
-            const reg = mesData.filter(d => {
-                const dia = new Date(d.fecha + "T00:00:00").getDate();
-                return dia >= dInicio && dia <= dFin;
-            });
-            const chrTotal = reg.reduce((sum, d) => sum + parseInt(d.chromebooks || 0), 0);
-            const reeTotal = reg.reduce((sum, d) => sum + parseInt(d.reemplazo || 0), 0);
-            const okReg = reg.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0 && !isDamagedRecord(d)).length;
-            return [`Semana ${s} (dias ${dInicio}-${dFin})`, reg.length, chrTotal, reeTotal, okReg,
-                reg.length > 0 ? Math.round(okReg / reg.length * 100) + '%' : '-'
-            ];
-        });
-
-        doc.setTextColor(44, 62, 80);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        doc.text("RESUMEN POR SEMANA", 14, TABLE_Y2);
-        doc.autoTable({
-            startY: TABLE_Y2 + 3,
-            head: [
-                ['Periodo', 'Prestamos', 'Chromebooks', 'Reemplazos', 'Devueltos OK', 'Tasa']
-            ],
-            body: semanaRows,
-            headStyles: {
-                fillColor: [0, 51, 102],
-                fontSize: 7.5,
-                fontStyle: 'bold',
-                textColor: 255
-            },
-            bodyStyles: {
-                fontSize: 7.5            },
-            alternateRowStyles: {
-                fillColor: [245, 248, 255]
-            },
-            columnStyles: {
-                0: {
-                    cellWidth: 58
-                },
-                1: {
-                    cellWidth: 25,
-                    halign: 'center'
-                },
-                2: {
-                    cellWidth: 30,
-                    halign: 'center'
-                },
-                3: {
-                    cellWidth: 28,
-                    halign: 'center'
-                },
-                4: {
-                    cellWidth: 28,
-                    halign: 'center'
-                },
-                5: {
-                    cellWidth: 13,
-                    halign: 'center',
-                    fontStyle: 'bold'
-                }
-            },
-            margin: {
-                left: 14,
-                right: 14
-            }
-        });
-
-        const conDanio = mesData.filter(d => isDamagedRecord(d));
-        const pendientes = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d));
-        if (conDanio.length > 0 || pendientes.length > 0) {
-            const alertY = doc.lastAutoTable.finalY + 6;
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(180, 0, 0);
-            doc.text("ALERTAS DEL MES", 14, alertY);
-            const alertRows = [
-                ...conDanio.map(d => ['DAÑO', d.fecha.split('-').reverse().slice(0, 2).join('/'), d.profesor, d.curso, d.observacion || 'Daño reportado']),
-                ...pendientes.map(d => ['PENDIENTE', d.fecha.split('-').reverse().slice(0, 2).join('/'), d.profesor, d.curso, `Chr:${d.chromebooks} Ree:${d.reemplazo} Dev:${d.devueltos}`])
-            ];
-            doc.autoTable({
-                startY: alertY + 3,
-                head: [
-                    ['Tipo', 'Fecha', 'Profesor', 'Curso', 'Detalle']
-                ],
-                body: alertRows,
-                headStyles: {
-                    fillColor: [180, 0, 0],
-                    fontSize: 7,
-                    fontStyle: 'bold',
-                    textColor: 255
-                },
-                bodyStyles: {
-                    fontSize: 7
-                },
-                columnStyles: {
-                    0: {
-                        cellWidth: 22
-                    },
-                    1: {
-                        cellWidth: 18,
-                        halign: 'center'
-                    },
-                    2: {
-                        cellWidth: 55
-                    },
-                    3: {
-                        cellWidth: 22,
-                        halign: 'center'
-                    },
-                    4: {
-                        cellWidth: 'auto'
-                    }
-                },
-                margin: {
-                    left: 14,
-                    right: 14
-                }
-            });
-        }
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFillColor(0, 51, 102);
-            doc.rect(0, 287, 210, 10, 'F');
-            doc.setFontSize(7);
-            doc.setTextColor(255, 255, 255);
-            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 293);
-            doc.text(`Página ${i} de ${pageCount}`, 196, 293, {
-                align: 'right'
-            });
-        }
-
-        restorePages();
-        doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
-    };
-
-    img.onload = () => setTimeout(buildPDF, 100);
-    img.onerror = () => setTimeout(buildPDF, 100);
-}
-
-function exportToCSV() {
-    const mesActual = mNames[viewDate.getMonth()];
-    const rows = [
-        ['ID', 'Fecha', 'Hora', 'Curso', 'Asignatura', 'Profesor', 'Chromebooks', 'Reemplazos', 'Devueltos', 'Observacion']
-    ];
-    const csvData = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-
-    if (csvData.length === 0) {
-        Swal.fire('Sin datos', 'No hay registros en este mes para exportar', 'info');
-        return;
-    }
-
-    csvData.forEach(r => {
-        rows.push([r.id, r.fecha, r.hora, r.curso, r.asignatura, r.profesor, r.chromebooks, r.reemplazo, r.devueltos, `"${r.observacion}"`]);
-    });
-
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Data_Chromebooks_${mesActual}_2026.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function generatePDFFiltrado() {
-    const datos = window._lastSortedData || [];
-    if (!datos || datos.length === 0) {
-        Swal.fire('Sin datos', 'No hay registros visibles para exportar.', 'info');
-        return;
-    }
-
-    const {
-        jsPDF
-    } = window.jspdf;
-    const doc = new jsPDF({
-        orientation: 'landscape'
-    });
-    const mesActual = mNames[viewDate.getMonth()];
-    const anioActual = viewDate.getFullYear();
-    const ahora = new Date().toLocaleDateString('es-CL');
-    const logoUrl = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = logoUrl;
-
-    const buildPDF = () => {
-        doc.setFillColor(0, 51, 102);
-        doc.rect(0, 0, 297, 28, 'F');
-        try {
-            doc.addImage(img, 'PNG', 268, 2, 16, 22);
-        } catch (e) {}
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.text("GESTIÓN CHROMEBOOKS 2026 – NSG", 10, 13);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Reporte filtrado: ${mesActual} ${anioActual}  |  Generado: ${ahora}  |  ${datos.length} registros`, 10, 22);
-
-        const body = datos.map(r => {
-            const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
-            const isDamaged = isDamagedRecord(r);
-            const totalOut = parseInt(r.chromebooks || 0) + parseInt(r.reemplazo || 0);
-            const isOK = totalOut === parseInt(r.devueltos || 0);
-            let estado = isOK ? 'DEVOLUCIÓN OK' : 'PENDIENTE';
-            if (isDamaged) estado = r.observacion || 'CON DAÑO';
-            if (isLab) estado = (isLab ? '🟣 LAB | ' : '') + estado;
-            return [
-                r.fecha.split('-').reverse().slice(0, 2).join('/'),
-                r.hora,
-                r.curso,
-                r.asignatura,
-                r.profesor,
-                r.chromebooks,
-                r.reemplazo,
-                r.devueltos,
-                estado
-            ];
-        });
-
-        doc.autoTable({
-            startY: 32,
-            head: [
-                ['Fecha', 'Bloque', 'Curso', 'Asignatura', 'Profesor', 'Chr.', 'Ree.', 'Dev.', 'Estado/Obs']
-            ],
-            body: body,
-            headStyles: {
-                fillColor: [13, 104, 50],
-                fontSize: 8,
-                fontStyle: 'bold',
-                textColor: 255
-            },
-            bodyStyles: {
-                fontSize: 7.5
-            },
-            alternateRowStyles: {
-                fillColor: [245, 250, 247]
-            },
-            columnStyles: {
-                0: {
-                    cellWidth: 18
-                },
-                1: {
-                    cellWidth: 16
-                },
-                2: {
-                    cellWidth: 20
-                },
-                3: {
-                    cellWidth: 32
-                },
-                4: {
-                    cellWidth: 48
-                },
-                5: {
-                    cellWidth: 12,
-                    halign: 'center'
-                },
-                6: {
-                    cellWidth: 12,
-                    halign: 'center'
-                },
-                7: {
-                    cellWidth: 12,
-                    halign: 'center'
-                },
-                8: {
-                    cellWidth: 'auto'
-                }
-            },
-            didParseCell: (data) => {
-                if (data.section === 'body') {
-                    const row = datos[data.row.index];
-                    const isDmg = isDamagedRecord(row);
-                    const isLb = row.uso_laboratorio === true || row.uso_laboratorio === "TRUE" || row.uso_laboratorio === "true";
-                    const tot = parseInt(row.chromebooks || 0) + parseInt(row.reemplazo || 0);
-                    const ok = tot === parseInt(row.devueltos || 0);
-                    if (isDmg) data.cell.styles.fillColor = [255, 235, 235];
-                    else if (isLb) data.cell.styles.fillColor = [243, 238, 255];
-                    else if (!ok) data.cell.styles.fillColor = [255, 251, 230];
-                }
-            }
-        });
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(160);
-            doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 10, 203);
-            doc.text(`Página ${i} de ${pageCount}`, 270, 203);
-        }
-
-        doc.save(`Reporte_Filtrado_${mesActual}_${anioActual}.pdf`);
-    };
-
-    img.onload = buildPDF;
-    img.onerror = buildPDF;
-}
-
-function verResumenProfesor(nombre) {
-    const registros = db.filter(d => d.profesor === nombre);
-    if (registros.length === 0) return;
-
-    const total = registros.length;
-    const ok = registros.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const pendientes = registros.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
-    const dañados = registros.filter(d => isDamagedRecord(d)).length;
-    const labs = registros.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-    const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
-    const totalChr = registros.reduce((s, d) => s + parseInt(d.chromebooks || 0), 0);
-    const totalRee = registros.reduce((s, d) => s + parseInt(d.reemplazo || 0), 0);
-
-    const ultimos = [...registros].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 3);
-    const ultimosHTML = ultimos.map(r => {
-        const f = r.fecha.split('-').reverse().slice(0, 2).join('/');
-        return `<tr><td>${f}</td><td>${r.curso}</td><td>${r.asignatura}</td><td>${r.chromebooks}</td></tr>`;
-    }).join('');
-
-    Swal.fire({
-        title: `<span style="color:#2b5797">👤 ${nombre}</span>`,
-        html: `
-        <div style="text-align:left; font-size:0.9rem;">
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <div style="background:#f0fff4; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#0d6832">${total}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">PRÉSTAMOS</div>
-                </div>
-                <div style="background:#fff8f0; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#f39c12">${pendientes}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">PENDIENTES</div>
-                </div>
-                <div style="background:#f8f0ff; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.6rem; font-weight:900; color:#6f42c1">${labs}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">LABORATORIO</div>
-                </div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <div style="background:#f0f4ff; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#2b5797">${tasa}%</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">TASA RETORNO</div>
-                </div>
-                <div style="background:#f5f5f5; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#333">${totalChr}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">CHR. TOTALES</div>
-                </div>
-                <div style="background:#fff5f5; border-radius:8px; padding:10px; text-align:center;">
-                    <div style="font-size:1.4rem; font-weight:900; color:#d32f2f">${dañados}</div>
-                    <div style="font-size:0.72rem; color:#666; font-weight:600">CON DAÑOS</div>
-                </div>
-            </div>
-            <div style="font-weight:700; color:#555; font-size:0.8rem; margin-bottom:6px;">ÚLTIMOS REGISTROS</div>
-            <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-                <thead><tr style="background:#f8f9fa; color:#555;">
-                    <th style="padding:5px 8px; text-align:left;">Fecha</th>
-                    <th style="padding:5px 8px;">Curso</th>
-                    <th style="padding:5px 8px;">Asignatura</th>
-                    <th style="padding:5px 8px;">Chr.</th>
-                 </tr></thead>
-                <tbody>${ultimosHTML}</tbody>
-             </table>
-        </div>`,
-        showConfirmButton: false,
-        showCloseButton: true,
-        width: 520,
-        customClass: {
-            popup: 'shadow-lg'
-        }
-    });
-}
-
-function renderAlertasPanel(mesCompleto) {
-    const wrapper = document.getElementById('alertasPanelWrapper');
-    const body = document.getElementById('alertasBody');
-    const badge = document.getElementById('alertasCount');
-    if (!wrapper || !body) return;
-
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const pendientes = mesCompleto.filter(d => {
-        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
-        const dev = parseInt(d.devueltos || 0);
-        const isDmg = isDamagedRecord(d);
-        return total > dev && !isDmg;
-    });
-
-    const danados = mesCompleto.filter(d => isDamagedRecord(d));
-
-    const totalAlertas = pendientes.length + danados.length;
-
-    if (totalAlertas === 0) {
-        wrapper.style.display = 'none';
-        return;
-    }
-
-    wrapper.style.display = 'block';
-    if (badge) badge.textContent = totalAlertas;
-
-    const sortedPendientes = [...pendientes].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-    let html = '';
-
-    sortedPendientes.forEach(d => {
-        const fechaD = new Date(d.fecha + "T00:00:00");
-        const diffMs = hoy - fechaD;
-        const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
-        const dev = parseInt(d.devueltos || 0);
-        const falta = total - dev;
-        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
-
-        let diasClass = 'alerta-dias';
-        let diasLabel = '';
-        if (dias === 0) {
-            diasClass += ' hoy';
-            diasLabel = 'HOY';
-        } else if (dias <= 2) {
-            diasClass += ' reciente';
-            diasLabel = dias + 'd';
-        } else diasLabel = dias + 'd';
-
-        const reeLabel = parseInt(d.reemplazo || 0) > 0 ?
-            ` · 🔴 ${d.nro_equipo_reemplazo || 'reemplazo'}` : '';
-
-        html += `<div class="alerta-item" onclick="editItem('${d.id}')">
-            <div class="${diasClass}"><div>${diasLabel}</div><div style="font-size:0.55rem;opacity:0.8;">${dias === 0 ? '' : 'atrás'}</div></div>
-            <div class="alerta-info">
-                <div class="alerta-nombre">👤 ${d.profesor}</div>
-                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">${falta} equipo${falta !== 1 ? 's' : ''} sin devolver</b>${reeLabel}</div>
-            </div>
-            <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;padding:3px 8px;">Editar</button>
-        </div>`;
-    });
-
-    danados.forEach(d => {
-        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
-        const obs = d.observacion || "Daño reportado";
-
-        html += `<div class="alerta-item" onclick="editItem('${d.id}')" style="border-left: 3px solid #dc3545;">
-            <div class="alerta-dias" style="background:#dc3545;"><div>⚠️</div><div style="font-size:0.55rem;">DAÑO</div></div>
-            <div class="alerta-info">
-                <div class="alerta-nombre">👤 ${d.profesor}</div>
-                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">🔴 ${obs}</b></div>
-            </div>
-            <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;padding:3px 8px;">Editar</button>
-        </div>`;
-    });
-
-    body.innerHTML = html;
-}
-
-let _wizardStep = 1;
-const WIZARD_TOTAL = 3;
 
 function wizardGoTo(step) {
     _wizardStep = step;
@@ -1912,42 +657,464 @@ function wizardNext() {
         const asig = document.getElementById('fAsignatura').value;
         const prof = document.getElementById('fProfesor').value;
         if (!fecha || !hora || !curso || !asig || !prof) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Campos incompletos',
-                text: 'Por favor complete Fecha, Hora, Curso, Asignatura y Profesor antes de continuar.',
-                confirmButtonColor: '#0d6832'
-            });
+            Swal.fire({ icon: 'warning', title: 'Campos incompletos', text: 'Complete Fecha, Hora, Curso, Asignatura y Profesor.', confirmButtonColor: '#0d6832' });
             return;
         }
     }
     if (_wizardStep === WIZARD_TOTAL - 1) {
-        const estadoMap = {
-            ok: '✅ Sin novedad',
-            pendiente: '⏳ Pendiente',
-            danio: '🔴 Con daño',
-            '': '—'
-        };
+        const estadoMap = { ok: '✅ Sin novedad', pendiente: '⏳ Pendiente', danio: '🔴 Con daño', '': '—' };
         const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
         const nroEq = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '—';
         const labCheck = document.getElementById('fLab')?.checked;
-        document.getElementById('cv-fecha').textContent = document.getElementById('fFecha').value || '—';
-        document.getElementById('cv-hora').textContent = document.getElementById('fHora').value || '—';
-        document.getElementById('cv-curso').textContent = document.getElementById('fCurso').value || '—';
-        document.getElementById('cv-asig').textContent = document.getElementById('fAsignatura').value || '—';
-        document.getElementById('cv-prof').textContent = document.getElementById('fProfesor').value || '—';
-        document.getElementById('cv-lab').textContent = labCheck ? '🟣 Sí' : 'No';
-        document.getElementById('cv-chr').textContent = document.getElementById('fChr').value || '0';
-        document.getElementById('cv-ree').textContent = document.getElementById('fRee').value || '0';
-        document.getElementById('cv-dev').textContent = document.getElementById('fDev').value || '0';
-        document.getElementById('cv-nroeq').textContent = nroEq;
-        document.getElementById('cv-estado').textContent = estadoMap[estadoDev] || '—';
+        const cvFecha = document.getElementById('cv-fecha');
+        const cvHora = document.getElementById('cv-hora');
+        const cvCurso = document.getElementById('cv-curso');
+        const cvAsig = document.getElementById('cv-asig');
+        const cvProf = document.getElementById('cv-prof');
+        const cvLab = document.getElementById('cv-lab');
+        const cvChr = document.getElementById('cv-chr');
+        const cvRee = document.getElementById('cv-ree');
+        const cvDev = document.getElementById('cv-dev');
+        const cvNroeq = document.getElementById('cv-nroeq');
+        const cvEstado = document.getElementById('cv-estado');
+        
+        if (cvFecha) cvFecha.textContent = document.getElementById('fFecha').value || '—';
+        if (cvHora) cvHora.textContent = document.getElementById('fHora').value || '—';
+        if (cvCurso) cvCurso.textContent = document.getElementById('fCurso').value || '—';
+        if (cvAsig) cvAsig.textContent = document.getElementById('fAsignatura').value || '—';
+        if (cvProf) cvProf.textContent = document.getElementById('fProfesor').value || '—';
+        if (cvLab) cvLab.textContent = labCheck ? '🟣 Sí' : 'No';
+        if (cvChr) cvChr.textContent = document.getElementById('fChr').value || '0';
+        if (cvRee) cvRee.textContent = document.getElementById('fRee').value || '0';
+        if (cvDev) cvDev.textContent = document.getElementById('fDev').value || '0';
+        if (cvNroeq) cvNroeq.textContent = nroEq;
+        if (cvEstado) cvEstado.textContent = estadoMap[estadoDev] || '—';
     }
     if (_wizardStep < WIZARD_TOTAL) wizardGoTo(_wizardStep + 1);
 }
 
 function wizardPrev() {
     if (_wizardStep > 1) wizardGoTo(_wizardStep - 1);
+}
+
+// ==================== CRUD OPERACIONES ====================
+async function saveData() {
+    const form = document.getElementById('resForm');
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        Swal.fire('Atención', 'Por favor complete todos los campos requeridos', 'warning');
+        return;
+    }
+
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.style.display = 'flex';
+
+    const esLab = document.getElementById('fLab').checked;
+    const estadoDevSeleccionado = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    let obsValue = document.getElementById('fObs')?.value || '';
+
+    if (estadoDevSeleccionado === 'ok') {
+        obsValue = obsValue || 'Sin novedad';
+    } else if (estadoDevSeleccionado === 'pendiente') {
+        obsValue = obsValue || 'Pendiente';
+    } else if (estadoDevSeleccionado === 'danio') {
+        const tipoDanio = (document.getElementById('fTipoDanio')?.value || '').trim();
+        obsValue = tipoDanio || obsValue || 'Dañado';
+    }
+
+    const chr = parseInt(document.getElementById('fChr').value) || 0;
+    const ree = parseInt(document.getElementById('fRee').value) || 0;
+    const dev = parseInt(document.getElementById('fDev').value) || 0;
+    
+    let estado = 'ACTIVO';
+    if (esLab) estado = 'LABORATORIO';
+    else if (obsValue.toLowerCase().includes('dañ')) estado = 'DAÑADO';
+    else if ((chr + ree) === dev && dev > 0) estado = 'CERRADO';
+    
+    const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0, 10) : '';
+    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
+
+    const payload = {
+        action: document.getElementById('fId').value ? 'update' : 'create',
+        id: document.getElementById('fId').value,
+        fecha: document.getElementById('fFecha').value,
+        hora: document.getElementById('fHora').value,
+        curso: document.getElementById('fCurso').value,
+        profesor: document.getElementById('fProfesor').value,
+        asignatura: document.getElementById('fAsignatura').value,
+        chromebooks: chr,
+        reemplazo: ree,
+        devueltos: dev,
+        observacion: obsValue,
+        nro_equipo_reemplazo: nroEquipo,
+        uso_laboratorio: esLab,
+        estado_operativo: estado,
+        fecha_cierre: fechaCierre,
+        responsable_cierre: 'Franco San Martín'
+    };
+
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        localStorage.removeItem('franco_draft');
+        bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+        
+        Swal.fire({
+            icon: 'success',
+            title: `Registro ${payload.action === 'create' ? 'creado' : 'actualizado'} correctamente`,
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        });
+        
+        setTimeout(() => load(), 500);
+    } catch (e) {
+        console.error('Error al guardar:', e);
+        Swal.fire('Error', 'No se pudo guardar el registro. Verifica tu conexión.', 'error');
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
+async function deleteItem(id) {
+    const result = await Swal.fire({
+        title: '¿Estás seguro?',
+        text: "Esta acción no se puede deshacer.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.style.display = 'flex';
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', id: id })
+            });
+            Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
+            setTimeout(() => load(), 500);
+        } catch (e) {
+            Swal.fire('Error', 'No se pudo eliminar.', 'error');
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    }
+}
+
+function editItem(id) {
+    const r = db.find(x => x.id.toString() === id.toString());
+    if (!r) return;
+    
+    const fId = document.getElementById('fId');
+    const fFecha = document.getElementById('fFecha');
+    const fHora = document.getElementById('fHora');
+    const fCurso = document.getElementById('fCurso');
+    const fProfesor = document.getElementById('fProfesor');
+    const fAsignatura = document.getElementById('fAsignatura');
+    const fChr = document.getElementById('fChr');
+    const fRee = document.getElementById('fRee');
+    const fDev = document.getElementById('fDev');
+    const fObs = document.getElementById('fObs');
+    const fLab = document.getElementById('fLab');
+    
+    if (fId) fId.value = r.id;
+    if (fFecha) fFecha.value = r.fecha;
+    if (fHora) fHora.value = r.hora;
+    if (fCurso) fCurso.value = r.curso;
+    fillDocentes();
+    if (fProfesor) fProfesor.value = r.profesor;
+    if (fAsignatura) fAsignatura.value = r.asignatura;
+    if (fChr) fChr.value = r.chromebooks;
+    if (fRee) fRee.value = r.reemplazo;
+    if (fDev) fDev.value = r.devueltos;
+    if (fObs) fObs.value = r.observacion;
+    
+    const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
+    if (fLab) fLab.checked = labVal;
+    
+    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
+    const ree = parseInt(r.reemplazo || 0);
+    if (nroEquipoWrapper) nroEquipoWrapper.style.display = ree > 0 ? 'block' : 'none';
+    document.querySelectorAll('input[name="fNroEquipo"]').forEach(rb => rb.checked = false);
+    if (r.nro_equipo_reemplazo) {
+        const rbEq = document.querySelector(`input[name="fNroEquipo"][value="${r.nro_equipo_reemplazo}"]`);
+        if (rbEq) rbEq.checked = true;
+    }
+    
+    const obs = (r.observacion || "").toLowerCase();
+    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
+    document.querySelectorAll('input[name="fEstadoDev"]').forEach(rb => rb.checked = false);
+    
+    const isDamaged = isDamagedRecord(r);
+    
+    if (isDamaged) {
+        const edDanio = document.getElementById('edDanio');
+        if (edDanio) edDanio.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'block';
+        const fTipoDanio = document.getElementById('fTipoDanio');
+        if (fTipoDanio) fTipoDanio.value = r.observacion;
+    } else if (obs === 'sin novedad' || obs === '' || obs === 'ok') {
+        const edOk = document.getElementById('edOk');
+        if (edOk) edOk.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    } else if (obs === 'pendiente') {
+        const edPend = document.getElementById('edPendiente');
+        if (edPend) edPend.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    }
+    
+    validateCounts();
+    wizardGoTo(2);
+    new bootstrap.Modal(document.getElementById('resModal')).show();
+}
+
+// ==================== DRAFT ====================
+function saveDraft() {
+    if (document.getElementById('fId').value !== "") return;
+    const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
+    const draft = {
+        fecha: document.getElementById('fFecha')?.value || '',
+        hora: document.getElementById('fHora')?.value || '',
+        curso: document.getElementById('fCurso')?.value || '',
+        profesor: document.getElementById('fProfesor')?.value || '',
+        asignatura: document.getElementById('fAsignatura')?.value || '',
+        obs: document.getElementById('fObs')?.value || '',
+        lab: document.getElementById('fLab')?.checked || false,
+        nroEquipo: nroEquipo,
+        estadoDev: estadoDev,
+        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
+    };
+    localStorage.setItem('franco_draft', JSON.stringify(draft));
+}
+
+function loadDraft() {
+    const saved = localStorage.getItem('franco_draft');
+    if (saved) {
+        const d = JSON.parse(saved);
+        const fFecha = document.getElementById('fFecha');
+        const fHora = document.getElementById('fHora');
+        const fCurso = document.getElementById('fCurso');
+        const fProfesor = document.getElementById('fProfesor');
+        const fAsignatura = document.getElementById('fAsignatura');
+        const fObs = document.getElementById('fObs');
+        const fLab = document.getElementById('fLab');
+        
+        if (fFecha && d.fecha) fFecha.value = d.fecha;
+        if (fHora && d.hora) fHora.value = d.hora;
+        if (fCurso && d.curso) fCurso.value = d.curso;
+        if (fProfesor && d.profesor) fProfesor.value = d.profesor;
+        if (fAsignatura && d.asignatura) fAsignatura.value = d.asignatura;
+        if (fObs && d.obs) fObs.value = d.obs;
+        if (fLab && d.lab !== undefined) fLab.checked = d.lab;
+        if (d.nroEquipo) {
+            const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
+            if (rb) rb.checked = true;
+            toggleNroEquipo();
+        }
+        if (d.estadoDev) {
+            const rb = document.querySelector(`input[name="fEstadoDev"][value="${d.estadoDev}"]`);
+            if (rb) {
+                rb.checked = true;
+                onEstadoDevChange();
+            }
+        }
+        if (d.tipoDanio && document.getElementById('fTipoDanio')) {
+            document.getElementById('fTipoDanio').value = d.tipoDanio;
+        }
+    }
+}
+
+// ==================== PDF ====================
+function generatePDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const mesActual = mNames[viewDate.getMonth()];
+    const anioActual = viewDate.getFullYear();
+    const fechaEmision = new Date().toLocaleDateString('es-CL');
+
+    const mesData = db.filter(d => {
+        const date = new Date(d.fecha + "T00:00:00");
+        return date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+    });
+
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 15);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 24);
+    doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín`, 14, 31);
+
+    const total = mesData.length;
+    const ok = mesData.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+    const dmg = mesData.filter(d => isDamagedRecord(d)).length;
+    const activos = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
+    const labs = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
+    const reemp = mesData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+    const tasa = total > 0 ? Math.round((ok / total) * 100) : 0;
+
+    const kpis = [
+        { label: 'Total Préstamos', value: total, color: [13, 104, 50] },
+        { label: 'Devoluciones OK', value: ok, color: [25, 135, 84] },
+        { label: 'Pendientes', value: activos, color: [255, 193, 7] },
+        { label: 'Con Daños', value: dmg, color: [211, 47, 47] },
+        { label: 'Uso Laboratorio', value: labs, color: [111, 66, 193] },
+        { label: 'Con Reemplazos', value: reemp, color: [220, 53, 69] }
+    ];
+
+    const kpiW = 27, kpiH = 18, kpiY0 = 40;
+    const kpiX0 = 14;
+    kpis.forEach((k, i) => {
+        const x = kpiX0 + i * (kpiW + 4);
+        doc.setFillColor(...k.color);
+        doc.roundedRect(x, kpiY0, kpiW, kpiH, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(String(k.value), x + kpiW / 2, kpiY0 + 8, { align: 'center' });
+        doc.setFontSize(5);
+        doc.setFont("helvetica", "normal");
+        doc.text(k.label.toUpperCase(), x + kpiW / 2, kpiY0 + 15, { align: 'center' });
+    });
+
+    doc.setFillColor(0, 51, 102);
+    doc.roundedRect(14, 63, 182, 8, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TASA DE RETORNO: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 69, { align: 'center' });
+
+    const docentesMap = {};
+    mesData.forEach(d => {
+        const k = d.profesor ? d.profesor.trim() : "—";
+        if (!docentesMap[k]) docentesMap[k] = { total: 0, ok: 0, reemp: 0, lab: 0, dmg: 0 };
+        docentesMap[k].total++;
+        if ((parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
+        if (parseInt(d.reemplazo || 0) > 0) docentesMap[k].reemp++;
+        if (d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
+        if (isDamagedRecord(d)) docentesMap[k].dmg++;
+    });
+
+    const todosDocentes = Object.entries(docentesMap).sort((a, b) => b[1].total - a[1].total);
+
+    doc.setTextColor(44, 62, 80);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 80);
+
+    doc.autoTable({
+        startY: 85,
+        head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
+        body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? `Sí (${v.reemp})` : '—', v.lab > 0 ? `Sí (${v.lab})` : '—', v.dmg > 0 ? v.dmg : '—']),
+        headStyles: { fillColor: [0, 51, 102], fontSize: 7, fontStyle: 'bold', textColor: 255 },
+        bodyStyles: { fontSize: 7 },
+        alternateRowStyles: { fillColor: [245, 248, 255] },
+        margin: { left: 14, right: 14 },
+        columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 24, halign: 'center' },
+            3: { cellWidth: 22, halign: 'center' },
+            4: { cellWidth: 26, halign: 'center' },
+            5: { cellWidth: 22, halign: 'center' },
+            6: { cellWidth: 18, halign: 'center' }
+        }
+    });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(128);
+        doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 290);
+        doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+    }
+
+    doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
+}
+
+function renderAlertasPanel(mesCompleto) {
+    const wrapper = document.getElementById('alertasPanelWrapper');
+    const body = document.getElementById('alertasBody');
+    const badge = document.getElementById('alertasCount');
+    if (!wrapper || !body) return;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const pendientes = mesCompleto.filter(d => {
+        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
+        const isDmg = isDamagedRecord(d);
+        return total > dev && !isDmg;
+    });
+
+    const danados = mesCompleto.filter(d => isDamagedRecord(d));
+    const totalAlertas = pendientes.length + danados.length;
+
+    if (totalAlertas === 0) {
+        wrapper.style.display = 'none';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    if (badge) badge.textContent = totalAlertas;
+
+    let html = '';
+
+    pendientes.forEach(d => {
+        const fechaD = new Date(d.fecha + "T00:00:00");
+        const diffMs = hoy - fechaD;
+        const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
+        const falta = total - dev;
+        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
+
+        let diasClass = 'alerta-dias';
+        let diasLabel = '';
+        if (dias === 0) { diasClass += ' hoy'; diasLabel = 'HOY'; }
+        else if (dias <= 2) { diasClass += ' reciente'; diasLabel = dias + 'd'; }
+        else diasLabel = dias + 'd';
+
+        html += `<div class="alerta-item" onclick="editItem('${d.id}')">
+            <div class="${diasClass}"><div>${diasLabel}</div></div>
+            <div class="alerta-info">
+                <div class="alerta-nombre">👤 ${d.profesor}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">${falta} equipo${falta !== 1 ? 's' : ''} sin devolver</b></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;">Editar</button>
+        </div>`;
+    });
+
+    danados.forEach(d => {
+        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
+        html += `<div class="alerta-item" onclick="editItem('${d.id}')" style="border-left: 3px solid #dc3545;">
+            <div class="alerta-dias" style="background:#dc3545;"><div>⚠️</div></div>
+            <div class="alerta-info">
+                <div class="alerta-nombre">👤 ${d.profesor}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">🔴 ${d.observacion || 'Daño reportado'}</b></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold">Editar</button>
+        </div>`;
+    });
+
+    body.innerHTML = html;
 }
 
 window.onload = load;
