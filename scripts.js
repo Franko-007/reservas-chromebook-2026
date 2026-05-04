@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN ====================
 // IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyfVmWcbftt5h1d4Xp2TtU7PCK4V_h2bIfO96xXYZtncqd6NqLkcy7TeNRUQ4Ph0rw/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwpTjv2y6ayOrdMTtaKJWeVaVJFjhp2hznacspQ7IBgZ8woelHsX0AFnvHII4QGhe8/exec";
 
 const STOCK_MAXIMO = 115;
 const STOCK_REEMPLAZO = 4;
@@ -106,7 +106,7 @@ async function load() {
 
         if (data.status === 'success') {
             db = data.data;
-            console.log('✅ Datos cargrados:', db.length, 'registros');
+            console.log('✅ Datos cargados:', db.length, 'registros');
             
             Swal.fire({
                 icon: 'success',
@@ -769,6 +769,7 @@ async function saveData() {
         reemplazo: ree,
         devueltos: dev,
         observacion: obsValue,
+        estado_dev: estadoDevSeleccionado,
         nro_equipo_reemplazo: nroEquipo,
         uso_laboratorio: esLab,
         estado_operativo: estado,
@@ -777,11 +778,14 @@ async function saveData() {
     };
 
     try {
-        // IMPORTANTE: NO usar 'no-cors' para POST
+        // IMPORTANTE: Apps Script no maneja el preflight de application/json.
+        // Se envía como text/plain (simple request, sin preflight) pero el
+        // body sigue siendo JSON válido que el servidor puede parsear con
+        // JSON.parse(e.postData.contents).
         const response = await fetch(SCRIPT_URL, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
             },
             body: JSON.stringify(payload)
         });
@@ -855,8 +859,8 @@ async function deleteItem(id) {
         try {
             const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json'
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8'
                 },
                 body: JSON.stringify({ action: 'delete', id: id })
             });
