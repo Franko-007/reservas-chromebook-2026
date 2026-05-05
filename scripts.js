@@ -55,6 +55,110 @@ function getWeekRanges(year, month) {
     return weekRanges;
 }
 
+// ==================== FORMATO HORA MANUAL 24H ====================
+function formatHoraInput(input) {
+    const cursorPos = input.selectionStart;
+    let raw = input.value;
+
+    // Si el usuario escribió manualmente el ":", respetarlo
+    if (raw.includes(':')) {
+        // Validar lo que hay
+        const parts = raw.split(':');
+        const h = parseInt(parts[0]) || 0;
+        const m = parseInt(parts[1]) || 0;
+        if (parts[0].length > 0 && parts[1] !== undefined) {
+            const valid = h <= 23 && m <= 59 && parts[1].length <= 2;
+            input.setCustomValidity(valid ? '' : 'Hora inválida');
+            input.classList.toggle('is-invalid', !valid);
+        }
+        return;
+    }
+
+    // Solo dígitos sin ":"
+    let digits = raw.replace(/\D/g, '').slice(0, 4);
+
+    if (digits.length === 0) {
+        input.value = '';
+        input.setCustomValidity('');
+        input.classList.remove('is-invalid');
+        return;
+    }
+
+    // Con 3 dígitos: puede ser H:MM (ej: 820 → 8:20) o seguir esperando el 4to
+    // Con 4 dígitos: siempre HH:MM (ej: 0830 → 08:30)
+    if (digits.length === 4) {
+        const h = parseInt(digits.slice(0, 2));
+        const m = parseInt(digits.slice(2));
+        input.value = digits.slice(0, 2) + ':' + digits.slice(2);
+        const valid = h <= 23 && m <= 59;
+        input.setCustomValidity(valid ? '' : 'Hora inválida');
+        input.classList.toggle('is-invalid', !valid);
+    } else if (digits.length === 3) {
+        // Heurística: si primer dígito > 2, es seguro que es H:MM (ej: 820 = 8:20)
+        // Si primer dígito <= 2, esperar 4to dígito pero mostrar provisional
+        const firstDigit = parseInt(digits[0]);
+        if (firstDigit >= 3) {
+            // Imposible que sea HH:MM con inicio >= 3 en dos dígitos válidos (30xx no existe)
+            // Tratar como H:MM
+            const h = parseInt(digits[0]);
+            const m = parseInt(digits.slice(1));
+            input.value = digits[0] + ':' + digits.slice(1);
+            const valid = h <= 9 && m <= 59;
+            input.setCustomValidity(valid ? '' : 'Hora inválida');
+            input.classList.toggle('is-invalid', !valid);
+        } else {
+            // Mostrar sin formatear todavía, esperar 4to dígito
+            input.value = digits;
+            input.setCustomValidity('');
+            input.classList.remove('is-invalid');
+        }
+    } else {
+        input.value = digits;
+        input.setCustomValidity('');
+        input.classList.remove('is-invalid');
+    }
+}
+
+// Al salir del campo (blur), forzar formato completo y padding
+function padHoraInput(input) {
+    let val = input.value.trim();
+    if (!val) return;
+
+    // Si no tiene ":", intentar interpretar
+    if (!val.includes(':')) {
+        const digits = val.replace(/\D/g, '');
+        if (digits.length === 3) {
+            const firstDigit = parseInt(digits[0]);
+            if (firstDigit >= 3) {
+                val = digits[0] + ':' + digits.slice(1);
+            } else {
+                // Ambiguo con 3 dígitos y primer dígito <= 2: asumir H:MM
+                val = digits[0] + ':' + digits.slice(1);
+            }
+        } else if (digits.length === 4) {
+            val = digits.slice(0, 2) + ':' + digits.slice(2);
+        } else if (digits.length === 1 || digits.length === 2) {
+            // Solo hora sin minutos: agregar :00
+            val = digits.padStart(2, '0') + ':00';
+        }
+    }
+
+    // Separar y hacer padding
+    const parts = val.split(':');
+    if (parts.length === 2) {
+        const h = parseInt(parts[0]);
+        const m = parseInt(parts[1]) || 0;
+        if (h <= 23 && m <= 59) {
+            input.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            input.setCustomValidity('');
+            input.classList.remove('is-invalid');
+        } else {
+            input.setCustomValidity('Hora inválida');
+            input.classList.add('is-invalid');
+        }
+    }
+}
+
 function fillDocentes() {
     const select = document.getElementById('fProfesor');
     if (!select) return;
