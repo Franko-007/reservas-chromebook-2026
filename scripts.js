@@ -362,7 +362,7 @@ function renderAll() {
             rows.push(`<tr class="${rowClass}">
                 <td><span class="text-muted" style="font-size:0.78rem;">${r.fecha.split('-').reverse().slice(0, 2).join('/')}</span></td>
                 <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
-                <td>${r.curso}${r.curso === 'ELECTIVO' ? ' 📚' : (r.curso === 'Reemplazo' ? ' 🔄' : '')}</td>
+                <td>${r.curso}${r.curso === 'ELECTIVO' ? ' ' : (r.curso === 'Reemplazo' ? ' ' : '')}</td>
                 <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
                 <td class="text-start fw-bold" style="color:#333;">${r.profesor}</td>
                 <td>${r.chromebooks}</td>
