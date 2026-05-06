@@ -1182,7 +1182,7 @@ function generatePDF() {
     doc.autoTable({
         startY: 85,
         head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
-        body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? `Sí (${v.reemp})` : '—', v.lab > 0 ? `Sí (${v.lab})` : '—', v.dmg > 0 ? v.dmg : '—']),
+        body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? v.reemp : '—', v.lab > 0 ? v.lab : '—', v.dmg > 0 ? v.dmg : '—']),
         headStyles: { fillColor: [0, 51, 102], fontSize: 7, fontStyle: 'bold', textColor: 255 },
         bodyStyles: { fontSize: 7 },
         alternateRowStyles: { fillColor: [245, 248, 255] },
