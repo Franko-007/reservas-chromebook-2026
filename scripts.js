@@ -1099,7 +1099,7 @@ function loadDraft() {
 }
 
 // ==================== PDF ====================
-function generatePDF() {
+async function generatePDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const mesActual = mNames[viewDate.getMonth()];
@@ -1111,16 +1111,37 @@ function generatePDF() {
         return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
     });
 
-    doc.setFillColor(0, 51, 102);
-    doc.rect(0, 0, 210, 30, 'F');
+    // Cargar logo institucional
+    let logoBase64 = null;
+    try {
+        const resp = await fetch("https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png");
+        const blob = await resp.blob();
+        logoBase64 = await new Promise(res => {
+            const reader = new FileReader();
+            reader.onloadend = () => res(reader.result);
+            reader.readAsDataURL(blob);
+        });
+    } catch(e) { console.warn("Logo no disponible:", e); }
+
+    // ── Cabecera página 1 ─────────────────────────────────────────────────────
+    const HEADER_H = 38;
+    doc.setFillColor(13, 104, 50);
+    doc.rect(0, 0, 210, HEADER_H, 'F');
+
+    // Logo al costado derecho (ratio 237:300 → 22 x 27.8)
+    if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 181, 4, 22, 27.8);
+    }
+
+    // Textos dentro del rect, bien alineados
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    doc.setFontSize(17);
     doc.setFont("helvetica", "bold");
-    doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 15);
+    doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 14);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 24);
-    doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín`, 14, 31);
+    doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 23);
+    doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 31);
 
     const total = mesData.length;
     const ok = mesData.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
@@ -1139,7 +1160,7 @@ function generatePDF() {
         { label: 'Con Reemplazos', value: reemp, color: [220, 53, 69] }
     ];
 
-    const kpiW = 27, kpiH = 18, kpiY0 = 40;
+    const kpiW = 27, kpiH = 18, kpiY0 = 44;
     const kpiX0 = 14;
     kpis.forEach((k, i) => {
         const x = kpiX0 + i * (kpiW + 4);
@@ -1155,11 +1176,11 @@ function generatePDF() {
     });
 
     doc.setFillColor(0, 51, 102);
-    doc.roundedRect(14, 63, 182, 8, 2, 2, 'F');
+    doc.roundedRect(14, 67, 182, 8, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text(`TASA DE RETORNO: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 69, { align: 'center' });
+    doc.text(`TASA DE RETORNO: ${tasa}%   ·   Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, 73, { align: 'center' });
 
     const docentesMap = {};
     mesData.forEach(d => {
@@ -1177,10 +1198,10 @@ function generatePDF() {
     doc.setTextColor(44, 62, 80);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 80);
+    doc.text(`Uso por Docente — ${todosDocentes.length} docente${todosDocentes.length !== 1 ? 's' : ''} registrados`, 14, 85);
 
     doc.autoTable({
-        startY: 85,
+        startY: 90,
         head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
         body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? v.reemp : '—', v.lab > 0 ? v.lab : '—', v.dmg > 0 ? v.dmg : '—']),
         headStyles: { fillColor: [0, 51, 102], fontSize: 7, fontStyle: 'bold', textColor: 255 },
@@ -1198,6 +1219,231 @@ function generatePDF() {
         }
     });
 
+    // ─── PÁGINA: DASHBOARD VISUAL ─────────────────────────────────────────────
+    doc.addPage();
+
+    // Header
+    doc.setFillColor(13, 104, 50);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("DASHBOARD - ANÁLISIS VISUAL", 14, 13);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${mesActual.toUpperCase()} ${anioActual}   |   ${total} préstamos   |   Tasa retorno: ${tasa}%   |   ${todosDocentes.length} docentes`, 14, 20);
+
+    // ── Sección izquierda: ESTADO DE EQUIPOS ──────────────────────────────────
+    const barData = [
+        { label: 'Entregados', value: ok,     color: [13, 104, 50] },
+        { label: 'Pendientes', value: activos, color: [255, 193, 7] },
+        { label: 'Dañados',    value: dmg,    color: [211, 47, 47] },
+        { label: 'Laboratorio',value: labs,   color: [111, 66, 193] },
+        { label: 'Reemplazos', value: reemp,  color: [220, 53, 69] }
+    ];
+    const maxVal = Math.max(...barData.map(b => b.value), 1);
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 27, 88, 52, 2, 2, 'F');
+    doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(14, 27, 88, 52, 2, 2, 'S');
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(44, 62, 80);
+    doc.text("ESTADO DE EQUIPOS DEL MES", 58, 33, { align: 'center' });
+
+    const bx0 = 50, bMaxW = 44, bH = 5, bGap = 7;
+    barData.forEach((b, i) => {
+        const by = 37 + i * bGap;
+        const bw = maxVal > 0 ? (b.value / maxVal) * bMaxW : 0;
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text(b.label, bx0 - 1, by + 3.5, { align: 'right' });
+        doc.setFillColor(235, 235, 235);
+        doc.roundedRect(bx0, by, bMaxW, bH, 1, 1, 'F');
+        if (bw > 0) {
+            doc.setFillColor(...b.color);
+            doc.roundedRect(bx0, by, bw, bH, 1, 1, 'F');
+        }
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...b.color);
+        doc.text(String(b.value), bx0 + bMaxW + 2, by + 3.5);
+    });
+
+    // ── Sección derecha: PRÉSTAMOS POR MES ────────────────────────────────────
+    const anualData = Array(12).fill(0);
+    db.forEach(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        if (!isNaN(dt) && dt.getFullYear() === anioActual) anualData[dt.getMonth()]++;
+    });
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(108, 27, 88, 52, 2, 2, 'F');
+    doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(108, 27, 88, 52, 2, 2, 'S');
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(44, 62, 80);
+    doc.text(`PRÉSTAMOS POR MES - ${anioActual}`, 152, 33, { align: 'center' });
+
+    const cx0 = 115, cY0 = 71, cW = 74, cH = 28;
+    const maxAnual = Math.max(...anualData, 1);
+    const monthShort = ["E","F","M","A","M","J","J","A","S","O","N","D"];
+    const colW = cW / 12;
+
+    // Grid line
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.2);
+    doc.line(cx0, cY0 - cH, cx0 + cW, cY0 - cH);
+    doc.line(cx0, cY0, cx0 + cW, cY0);
+
+    // Line chart points
+    const points = anualData.map((v, i) => ({
+        x: cx0 + i * colW + colW / 2,
+        y: cY0 - (v / maxAnual) * cH
+    }));
+
+    // Draw line
+    doc.setDrawColor(13, 104, 50);
+    doc.setLineWidth(0.8);
+    for (let i = 0; i < points.length - 1; i++) {
+        doc.line(points[i].x, points[i].y, points[i+1].x, points[i+1].y);
+    }
+
+    // Dots + labels
+    points.forEach((p, i) => {
+        doc.setFillColor(13, 104, 50);
+        doc.circle(p.x, p.y, 1, 'F');
+        doc.setFontSize(5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(120, 120, 120);
+        doc.text(monthShort[i], p.x, cY0 + 4, { align: 'center' });
+        if (anualData[i] > 0) {
+            doc.setFontSize(5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(13, 104, 50);
+            doc.text(String(anualData[i]), p.x, p.y - 2, { align: 'center' });
+        }
+    });
+
+    // ── PRÉSTAMOS POR DOCENTE (barras horizontales) ───────────────────────────
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 84, 182, 7 + todosDocentes.length * 6.2, 2, 2, 'F');
+    doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(14, 84, 182, 7 + todosDocentes.length * 6.2, 2, 2, 'S');
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(44, 62, 80);
+    doc.text("PRÉSTAMOS POR DOCENTE", 105, 90, { align: 'center' });
+
+    const dBarX0 = 60, dBarMaxW = 120, dBarH = 4, dBarGap = 6.2;
+    const maxD = todosDocentes.length > 0 ? todosDocentes[0][1].total : 1;
+
+    todosDocentes.forEach(([nombre, v], i) => {
+        const dy = 94 + i * dBarGap;
+        const dw = (v.total / maxD) * dBarMaxW;
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text(nombre, dBarX0 - 2, dy + 2.8, { align: 'right' });
+        doc.setFillColor(235, 235, 235);
+        doc.roundedRect(dBarX0, dy, dBarMaxW, dBarH, 1, 1, 'F');
+        doc.setFillColor(13, 104, 50);
+        doc.roundedRect(dBarX0, dy, dw, dBarH, 1, 1, 'F');
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(13, 104, 50);
+        doc.text(String(v.total), dBarX0 + dBarMaxW + 2, dy + 2.8);
+    });
+
+    // ─── PÁGINA: RESUMEN SEMANAL + ALERTAS ───────────────────────────────────
+    doc.addPage();
+
+    doc.setFillColor(13, 104, 50);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("RESUMEN SEMANAL", 14, 13);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${mesActual.toUpperCase()} ${anioActual}`, 14, 20);
+
+    // Build weekly data
+    const weeklyData = [1, 2, 3, 4].map(wk => {
+        const wRows = mesData.filter(d => {
+            const dt = new Date(d.fecha + "T00:00:00");
+            if (isNaN(dt)) return false;
+            const day = dt.getDate();
+            return wk === 1 ? day <= 7 : wk === 2 ? day <= 14 : wk === 3 ? day <= 21 : true;
+        });
+        const uniqueWeek = wk === 1 ? wRows :
+            mesData.filter(d => {
+                const dt = new Date(d.fecha + "T00:00:00");
+                if (isNaN(dt)) return false;
+                const day = dt.getDate();
+                return wk === 2 ? (day > 7 && day <= 14) : wk === 3 ? (day > 14 && day <= 21) : day > 21;
+            });
+        const prest = uniqueWeek.length;
+        const chr = uniqueWeek.reduce((a, d) => a + parseInt(d.chromebooks || 0), 0);
+        const rep = uniqueWeek.reduce((a, d) => a + parseInt(d.reemplazo || 0), 0);
+        const dev = uniqueWeek.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+        const tasaW = prest > 0 ? Math.round((dev / prest) * 100) : 0;
+        return [`Semana ${wk}`, prest, chr, rep, dev, `${tasaW}%`];
+    });
+
+    doc.autoTable({
+        startY: 30,
+        head: [['Período', 'Préstamos', 'Chromebooks', 'Reemplazos', 'Devueltos OK', 'Tasa']],
+        body: weeklyData,
+        headStyles: { fillColor: [0, 51, 102], fontSize: 8, fontStyle: 'bold', textColor: 255 },
+        bodyStyles: { fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 248, 255] },
+        margin: { left: 14, right: 14 }
+    });
+
+    // Alertas
+    const alertas = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d));
+    const alertasY = doc.lastAutoTable.finalY + 12;
+
+    doc.setFillColor(198, 40, 40);
+    doc.roundedRect(14, alertasY, 182, 10, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("⚠ ALERTAS DEL MES", 17, alertasY + 6.5);
+    doc.setFontSize(8);
+    doc.text(`${alertas.length} alerta${alertas.length !== 1 ? 's' : ''}`, 192, alertasY + 6.5, { align: 'right' });
+
+    if (alertas.length === 0) {
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text("✓ Sin alertas pendientes en este mes.", 105, alertasY + 20, { align: 'center' });
+    } else {
+        doc.autoTable({
+            startY: alertasY + 12,
+            head: [['Tipo', 'Fecha', 'Profesor', 'Curso', 'Detalle']],
+            body: alertas.map(d => [
+                'PENDIENTE',
+                d.fecha || '—',
+                d.profesor || '—',
+                d.curso || '—',
+                `Chr:${d.chromebooks || 0} Ree:${d.reemplazo || 0} Dev:${d.devueltos || 0}`
+            ]),
+            headStyles: { fillColor: [198, 40, 40], fontSize: 7, fontStyle: 'bold', textColor: 255 },
+            bodyStyles: { fontSize: 7 },
+            alternateRowStyles: { fillColor: [255, 245, 245] },
+            margin: { left: 14, right: 14 }
+        });
+    }
+
+    // ─── FOOTER EN TODAS LAS PÁGINAS ─────────────────────────────────────────
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
