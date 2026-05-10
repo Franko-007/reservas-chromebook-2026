@@ -1125,7 +1125,7 @@ async function generatePDF() {
 
     // ── Cabecera página 1 ─────────────────────────────────────────────────────
     const HEADER_H = 38;
-    doc.setFillColor(13, 104, 50);
+    doc.setFillColor(0, 84, 166);
     doc.rect(0, 0, 210, HEADER_H, 'F');
 
     // Logo al costado derecho (ratio 237:300 → 22 x 27.8)
