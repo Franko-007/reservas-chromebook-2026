@@ -225,6 +225,17 @@ async function load() {
             throw new Error(data.message || 'Error al cargar datos');
         }
 
+        // Auto-detectar semana actual al cargar
+        if (currentWeek === 0) {
+            const hoy = new Date();
+            const esEsteMes = hoy.getFullYear() === viewDate.getFullYear() && hoy.getMonth() === viewDate.getMonth();
+            if (esEsteMes) {
+                const dia = hoy.getDate();
+                const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
+                currentWeek = semana;
+                document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === semana));
+            }
+        }
         renderAll();
         renderAnualChart();
     } catch (error) {
@@ -1223,7 +1234,7 @@ async function generatePDF() {
     doc.addPage();
 
     // Header
-    doc.setFillColor(13, 104, 50);
+    doc.setFillColor(0, 51, 102);
     doc.rect(0, 0, 210, 22, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
