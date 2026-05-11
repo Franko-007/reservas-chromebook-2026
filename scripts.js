@@ -39,20 +39,129 @@ function getEstado(r) {
     return "CERRADO";
 }
 
+// ==================== CALENDARIO ESCOLAR NSG 2026 ====================
+// Semanas basadas en días hábiles reales (lunes–viernes, sin feriados).
+// Clave: "YYYY-M" (mes 0-indexed). Cada semana tiene { start, end, label }.
+const SCHOOL_WEEKS = {
+    // MAYO 2026 (mes 4)
+    "2026-4": {
+        1: { start: 4,  end: 8,  label: "Semana 1" },   // 4–8 may
+        2: { start: 11, end: 15, label: "Semana 2" },   // 11–15 may
+        3: { start: 18, end: 20, label: "Semana 3" },   // 18–20 may (21-22 feriados)
+        4: { start: 25, end: 29, label: "Semana 4" }    // 25–29 may
+    },
+    // JUNIO 2026 (mes 5)
+    "2026-5": {
+        1: { start: 1,  end: 5,  label: "Semana 1" },
+        2: { start: 8,  end: 12, label: "Semana 2" },
+        3: { start: 15, end: 19, label: "Semana 3" },
+        4: { start: 22, end: 26, label: "Semana 4" }
+    },
+    // JULIO 2026 (mes 6)
+    "2026-6": {
+        1: { start: 1,  end: 3,  label: "Semana 1" },   // 1–3 jul (vacaciones invierno desde 6)
+        2: { start: 20, end: 24, label: "Semana 2" },   // vuelta
+        3: { start: 27, end: 31, label: "Semana 3" }
+    },
+    // AGOSTO 2026 (mes 7)
+    "2026-7": {
+        1: { start: 3,  end: 7,  label: "Semana 1" },
+        2: { start: 10, end: 14, label: "Semana 2" },
+        3: { start: 17, end: 21, label: "Semana 3" },
+        4: { start: 24, end: 28, label: "Semana 4" }
+    },
+    // SEPTIEMBRE 2026 (mes 8)
+    "2026-8": {
+        1: { start: 1,  end: 4,  label: "Semana 1" },   // 7 sep feriado
+        2: { start: 8,  end: 11, label: "Semana 2" },   // 14-18 fiestas patrias
+        3: { start: 21, end: 25, label: "Semana 3" },
+        4: { start: 28, end: 30, label: "Semana 4" }
+    },
+    // OCTUBRE 2026 (mes 9)
+    "2026-9": {
+        1: { start: 1,  end: 2,  label: "Semana 1" },
+        2: { start: 5,  end: 9,  label: "Semana 2" },
+        3: { start: 12, end: 16, label: "Semana 3" },
+        4: { start: 19, end: 23, label: "Semana 4" },
+        5: { start: 26, end: 30, label: "Semana 5" }
+    },
+    // NOVIEMBRE 2026 (mes 10)
+    "2026-10": {
+        1: { start: 2,  end: 6,  label: "Semana 1" },
+        2: { start: 9,  end: 13, label: "Semana 2" },
+        3: { start: 16, end: 20, label: "Semana 3" },
+        4: { start: 23, end: 27, label: "Semana 4" }
+    },
+    // DICIEMBRE 2026 (mes 11)
+    "2026-11": {
+        1: { start: 1,  end: 4,  label: "Semana 1" },
+        2: { start: 7,  end: 11, label: "Semana 2" },
+        3: { start: 14, end: 18, label: "Semana 3" }
+    },
+    // MARZO 2026 (mes 2) — referencia histórica
+    "2026-2": {
+        1: { start: 2,  end: 6,  label: "Semana 1" },
+        2: { start: 9,  end: 13, label: "Semana 2" },
+        3: { start: 16, end: 20, label: "Semana 3" },
+        4: { start: 23, end: 27, label: "Semana 4" }
+    },
+    // ABRIL 2026 (mes 3)
+    "2026-3": {
+        1: { start: 1,  end: 3,  label: "Semana 1" },   // Semana Santa
+        2: { start: 6,  end: 9,  label: "Semana 2" },   // 10 abr feriado
+        3: { start: 13, end: 17, label: "Semana 3" },
+        4: { start: 20, end: 24, label: "Semana 4" },
+        5: { start: 27, end: 30, label: "Semana 5" }
+    }
+};
+
+/**
+ * Devuelve las semanas escolares para un año/mes dado.
+ * Si el mes está en SCHOOL_WEEKS, usa ese calendario real.
+ * Si no, genera semanas genéricas lunes–viernes como fallback.
+ */
 function getWeekRanges(year, month) {
-    const firstDayOfMonth = new Date(year, month, 1);
+    const key = `${year}-${month}`;
+    if (SCHOOL_WEEKS[key]) return SCHOOL_WEEKS[key];
+
+    // Fallback genérico: semanas de lunes a viernes
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    let firstMonday = new Date(firstDayOfMonth);
-    while (firstMonday.getDay() !== 1) firstMonday.setDate(firstMonday.getDate() + 1);
-    let firstWeekEnd = 7 - (firstDayOfMonth.getDay() === 0 ? 6 : firstDayOfMonth.getDay() - 1);
-    firstWeekEnd = Math.min(firstWeekEnd, daysInMonth);
-    const weekRanges = {
-        1: { start: 1, end: firstWeekEnd },
-        2: { start: firstWeekEnd + 1, end: Math.min(firstWeekEnd + 7, daysInMonth) },
-        3: { start: firstWeekEnd + 8, end: Math.min(firstWeekEnd + 14, daysInMonth) },
-        4: { start: firstWeekEnd + 15, end: Math.min(firstWeekEnd + 21, daysInMonth) }
-    };
-    return weekRanges;
+    const firstDay = new Date(year, month, 1);
+    // Encontrar primer lunes
+    let d = new Date(firstDay);
+    while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+    const ranges = {};
+    let w = 1;
+    while (d.getDate() <= daysInMonth && d.getMonth() === month) {
+        const start = d.getDate();
+        const end = Math.min(start + 4, daysInMonth);
+        ranges[w] = { start, end, label: `Semana ${w}` };
+        w++;
+        d.setDate(d.getDate() + 7);
+    }
+    return ranges;
+}
+
+/**
+ * Detecta el número de semana escolar correspondiente a una fecha.
+ * Retorna el número de semana (1-based) o el más cercano.
+ */
+function getCurrentSchoolWeek(year, month, day) {
+    const ranges = getWeekRanges(year, month);
+    const weeks = Object.keys(ranges).map(Number).sort((a, b) => a - b);
+    // Buscar semana exacta
+    for (const w of weeks) {
+        if (day >= ranges[w].start && day <= ranges[w].end) return w;
+    }
+    // Si el día cae entre semanas (feriado, fin de semana), encontrar la más cercana
+    let closest = weeks[weeks.length - 1];
+    let minDist = Infinity;
+    for (const w of weeks) {
+        const mid = (ranges[w].start + ranges[w].end) / 2;
+        const dist = Math.abs(day - mid);
+        if (dist < minDist) { minDist = dist; closest = w; }
+    }
+    return closest;
 }
 
 // ==================== FORMATO HORA MANUAL 24H ====================
@@ -225,16 +334,13 @@ async function load() {
             throw new Error(data.message || 'Error al cargar datos');
         }
 
-        // Auto-detectar semana actual al cargar
-        if (currentWeek === 0) {
-            const hoy = new Date();
-            const esEsteMes = hoy.getFullYear() === viewDate.getFullYear() && hoy.getMonth() === viewDate.getMonth();
-            if (esEsteMes) {
-                const dia = hoy.getDate();
-                const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
-                currentWeek = semana;
-                document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === semana));
-            }
+        // Auto-detectar semana escolar actual al cargar
+        const _hoy = new Date();
+        const _esEsteMes = _hoy.getFullYear() === viewDate.getFullYear() && _hoy.getMonth() === viewDate.getMonth();
+        if (_esEsteMes) {
+            const _semana = getCurrentSchoolWeek(_hoy.getFullYear(), _hoy.getMonth(), _hoy.getDate());
+            currentWeek = _semana;
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === _semana));
         }
         renderAll();
         renderAnualChart();
@@ -277,6 +383,23 @@ function renderAll() {
     const searchTerm = (document.getElementById('searchBox')?.value || "").toLowerCase();
     const courseFilter = document.getElementById('courseSelect')?.value || "";
     const weekRanges = getWeekRanges(viewDate.getFullYear(), viewDate.getMonth());
+
+    // Actualizar tooltips/textos de los tabs de semana según calendario escolar real
+    const tabBtns = document.querySelectorAll('.tab-btn[data-week]');
+    tabBtns.forEach(btn => {
+        const w = parseInt(btn.dataset.week);
+        if (w > 0 && weekRanges[w]) {
+            const r = weekRanges[w];
+            btn.title = `${r.label}: días ${r.start}–${r.end}`;
+        }
+    });
+    // También actualizar por índice si no tienen data-week
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        if (i > 0 && weekRanges[i]) {
+            const r = weekRanges[i];
+            if (!btn.dataset.week) btn.title = `${r.label}: días ${r.start}–${r.end}`;
+        }
+    });
 
     const baseFiltered = db.filter(d => {
         const date = new Date(d.fecha + "T00:00:00");
@@ -483,7 +606,9 @@ function updateKPIs(base) {
             const day = new Date(d.fecha + "T00:00:00").getDate();
             return day >= range.start && day <= range.end;
         }).length;
-        labelSemTxt = `días ${range.start}–${range.end}`;
+        // Mostrar label del calendario escolar ("Semana 2 · días 11–15")
+        const schoolLabel = range.label || `Semana ${currentWeek}`;
+        labelSemTxt = `${schoolLabel} · días ${range.start}–${range.end}`;
     }
 
     animateKPI('kpi-semana', prestSemana);
@@ -670,8 +795,7 @@ function irASemanaActual() {
     const courseSelect = document.getElementById('courseSelect');
     if (searchBox) searchBox.value = '';
     if (courseSelect) courseSelect.value = '';
-    const dia = hoy.getDate();
-    const semana = dia <= 7 ? 1 : dia <= 14 ? 2 : dia <= 21 ? 3 : 4;
+    const semana = getCurrentSchoolWeek(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     currentWeek = semana;
     document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === semana));
     renderAll();
@@ -1234,7 +1358,7 @@ async function generatePDF() {
     doc.addPage();
 
     // Header
-    doc.setFillColor(0, 51, 102);
+    doc.setFillColor(13, 104, 50);
     doc.rect(0, 0, 210, 22, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
