@@ -22,7 +22,7 @@ const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", 
 // ==================== FUNCIONES AUXILIARES ====================
 function isDamagedRecord(record) {
     const obs = (record.observacion || "").toLowerCase();
-    const damagedKeywords = ["dañ", "pantalla", "teclado", "enciende", "rota", "rayada", "falla", "malo", "averiado", "roto", "golpe", "quemado", "rayado", "sin rótulo", "sin rotulo", "sucio", "sin tecla"];
+    const damagedKeywords = ["daño", "pantalla", "teclado", "no enciende", "rota", "rayada", "falla", "malo", "averiado", "roto", "golpe", "quemado", "rayado", "sin rótulo", "sin rotulo", "sucio", "sin tecla"];
     const hasDamageKeyword = damagedKeywords.some(keyword => obs.includes(keyword));
     const hasDamageState = record.estado_dev === "danio";
     return hasDamageKeyword || hasDamageState;
