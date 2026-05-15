@@ -443,7 +443,15 @@ function renderAll() {
         if (tableEl) tableEl.style.display = 'table';
         if (emptyState) emptyState.style.display = 'none';
 
-        const sorted = [...finalFiltered].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        const sorted = [...finalFiltered].sort((a, b) => {
+            // Primero ordenar por fecha descendente (más reciente primero)
+            const fechaDiff = new Date(b.fecha) - new Date(a.fecha);
+            if (fechaDiff !== 0) return fechaDiff;
+            // Mismo día: ordenar por hora ascendente (08:00 antes que 09:00)
+            const horaA = (a.hora || '00:00').trim();
+            const horaB = (b.hora || '00:00').trim();
+            return horaA.localeCompare(horaB);
+        });
         window._lastSortedData = sorted;
 
         const contadorEl = document.getElementById('recordCount');
