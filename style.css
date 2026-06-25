@@ -420,3 +420,262 @@ thead th {
     color: #856404;
     font-weight: 500;
 }
+
+/* ==================== CLASES UTILITARIAS (reemplazan inline styles) ==================== */
+
+/* Action bar buttons */
+.btn-inst        { background: var(--azul-inst) !important; border: none !important; }
+.btn-green       { background: #0d6832 !important; }
+.btn-page-active { background: #0d6832 !important; color: white !important; border: 1.5px solid #0d6832 !important; }
+.btn-page-idle   { background: white !important; color: #555 !important; border: 1.5px solid #ddd !important; }
+.action-bar-sep  { border-left: 1px solid #ddd; padding-left: 10px; }
+
+/* display date */
+.display-date    { min-width: 250px; text-align: center; color: #2c3e50; }
+
+/* KPI card colors */
+.kpi-val-green   { color: #107c41; }
+.kpi-val-blue    { color: #1976d2; }
+.kpi-val-purple  { color: #6f42c1; }
+.kpi-val-red     { color: #dc3545; }
+.kpi-val-teal    { color: #198754; }
+.kpi-val-danger  { color: var(--danger-red); }
+
+/* KPI semana especial */
+.kpi-card-semana { position: relative; }
+.kpi-semana-glow { display: none; position: absolute; inset: 0;
+                   background: linear-gradient(135deg, rgba(21,101,192,0.07), rgba(13,71,161,0.04));
+                   border-radius: 12px; pointer-events: none; }
+.kpi-semana-h6   { color: #1565c0; }
+.kpi-semana-label{ font-size: 0.65rem; color: #999; margin-top: 5px; font-weight: 600; }
+
+/* Stock bar */
+.stock-card         { background: white; border: 1px solid #eee; }
+.stock-label        { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; }
+.stock-nums         { font-size: 0.8rem; color: #555; }
+.stock-en-uso       { color: #dc3545; }
+.stock-disponible   { color: #198754; }
+.stock-track        { background: #f0f0f0; border-radius: 20px; height: 18px; overflow: hidden; position: relative; }
+.stock-bar-uso      { height: 100%; background: linear-gradient(90deg, #dc3545, #ff6b6b);
+                      border-radius: 20px 0 0 20px; transition: width 0.6s ease; width: 0%; }
+.stock-bar-overlay  { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                      display: flex; align-items: center; justify-content: center;
+                      font-size: 0.72rem; font-weight: 700; color: #333; }
+.stock-footer       { font-size: 0.7rem; color: #999; }
+.stock-warning      { color: #dc3545; font-weight: 700; display: none; }
+
+/* alertasPanelWrapper oculto por defecto */
+.alertas-panel-wrapper { display: none; }
+
+/* pageStats banner */
+.stats-banner       { background: white; border-left: 5px solid #0d6832;
+                       box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.stats-banner-icon  { font-size: 1.8rem; }
+.stats-banner-title { color: #0d6832; }
+
+/* Canvas wrappers */
+.chart-wrap-300 { height: 300px; width: 100%; }
+.chart-wrap-320 { height: 320px; width: 100%; }
+
+/* Section headers en stats */
+.section-label { text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1px; }
+.section-sub   { font-size: 0.7rem; }
+
+/* Search filter */
+.fs-search { font-size: 0.9rem !important; }
+
+/* emptyState image */
+.empty-img { opacity: 0.5; margin-bottom: 15px; }
+
+/* Modal badge LAB en el form */
+.lab-badge-wrap { background: #f3f0ff; border: 1.5px solid #6f42c1; }
+.lab-badge-title{ color: #6f42c1; font-size: 0.95rem; }
+.lab-badge-sub  { font-size: 0.78rem; }
+.lab-switch     { width: 3em; height: 1.6em; cursor: pointer; accent-color: #6f42c1; }
+
+/* Modal form sections */
+.modal-lab-wrap       { background: #f3f0ff; border: 1.5px solid #6f42c1; }
+.modal-lab-title      { color: #6f42c1; font-size: 0.95rem; }
+.modal-lab-sub        { font-size: 0.78rem; }
+.modal-danger-wrap    { background: #fff5f5; border: 1.5px solid #dc3545; }
+.modal-info-wrap      { background: #f0f9ff; border: 1.5px solid #0288d1; }
+.modal-warn-confirm   { background: #fffdf5 !important; border-color: #ffe082 !important; }
+.modal-warn-h6        { color: #e65100; }
+.modal-ok-wrap        { background: #f0fff4; border: 1.5px solid #81c784; }
+.modal-ok-text        { font-size: 0.8rem; color: #2e7d32; font-weight: 700; }
+.btn-nowrap           { white-space: nowrap; }
+
+/* ==================== MODO OSCURO ==================== */
+.dark-toggle-btn {
+    margin-left: auto;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.dark-toggle-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+
+body.dark-mode {
+    --bg-light: #1a1a2e;
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+}
+body.dark-mode .action-bar        { background: #16213e; border-color: #2a2a4a; }
+body.dark-mode .content-card      { background: #16213e; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+body.dark-mode .kpi-card          { background: #16213e; border-color: #2a2a4a; }
+body.dark-mode .kpi-card:hover    { border-color: #0d6832; }
+body.dark-mode .kpi-card h6       { color: #aaa; }
+body.dark-mode .stock-card        { background: #16213e !important; border-color: #2a2a4a !important; }
+body.dark-mode .table             { color: #ddd; }
+body.dark-mode .table-hover tbody tr:hover td { background: #1e2d4a !important; }
+body.dark-mode thead th           { background: #0f1a2e !important; color: #bbb; border-color: #2a2a4a; }
+body.dark-mode .form-control,
+body.dark-mode .form-select       { background: #0f1a2e; color: #e0e0e0; border-color: #2a2a4a; }
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus { background: #16213e; color: #fff; border-color: #0d6832; }
+body.dark-mode .bg-light          { background: #0f1a2e !important; color: #e0e0e0 !important; }
+body.dark-mode .modal-content     { background: #16213e; color: #e0e0e0; }
+body.dark-mode .modal-header      { background: #0f1a2e !important; }
+body.dark-mode .wizard-steps      { background: #0f1a2e; border-color: #2a2a4a; }
+body.dark-mode .wizard-nav        { background: #0f1a2e; border-color: #2a2a4a; }
+body.dark-mode .confirm-card      { background: #0f2a3a !important; border-color: #1a4a5a !important; }
+body.dark-mode .tab-btn           { background: #16213e; border-color: #2a2a4a; color: #ccc; }
+body.dark-mode .tab-btn.active    { background: #0d6832; color: white; }
+body.dark-mode .footer            { background: #16213e; border-color: #2a2a4a; color: #666; }
+body.dark-mode .text-muted        { color: #888 !important; }
+body.dark-mode .text-dark         { color: #e0e0e0 !important; }
+body.dark-mode #alertasPanel      { background: #16213e; border-color: #4a1a1a; }
+body.dark-mode .alerta-item       { border-color: #2a1a1a; }
+body.dark-mode .alerta-item:hover { background: #1e1a2e; }
+body.dark-mode .stats-banner      { background: #16213e !important; }
+body.dark-mode .day-separator-row td { background: #222 !important; }
+body.dark-mode .display-date      { color: #e0e0e0; }
+body.dark-mode #loading           { background: rgba(26,26,46,0.9); }
+
+/* Semáforo de días en alertas */
+.alerta-dias.semana  { background: #e65100; }  /* 4–7 días: naranja fuerte */
+.alerta-dias.critico { background: #7b1fa2; }  /* >7 días: morado crítico */
+
+/* ==================== EDICIÓN INLINE ==================== */
+tbody tr[ondblclick] {
+    cursor: pointer;
+}
+tbody tr[ondblclick]:hover td {
+    position: relative;
+}
+tbody tr[ondblclick]:hover td:last-child::after {
+    content: '✏️';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* ==================== KPI OBSERVACIONES ==================== */
+.kpi-val-obs { color: #d15f02; }
+
+/* ==================== PANEL OBSERVACIONES ==================== */
+#obsPanel {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    overflow: hidden;
+    border: 1px solid #e3f2fd;
+    background: white;
+}
+
+.obs-header {
+    background: linear-gradient(135deg, #bd6602, #d15502);
+    color: white;
+    padding: 13px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.obs-header h6 {
+    margin: 0;
+    font-weight: 800;
+    font-size: 0.82rem;
+    letter-spacing: 0.5px;
+}
+
+.obs-count-badge {
+    background: rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+.obs-close-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+.obs-close-btn:hover { background: rgba(255,255,255,0.4); }
+
+.obs-body {
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.obs-item {
+    padding: 11px 16px;
+    border-bottom: 1px solid #e3f2fd;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    transition: background 0.2s;
+    cursor: pointer;
+}
+.obs-item:hover { background: #f0f9ff; }
+.obs-item:last-child { border-bottom: none; }
+
+.obs-fecha-badge {
+    background: #d18902;
+    color: white;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    min-width: 44px;
+    text-align: center;
+    flex-shrink: 0;
+    line-height: 1.3;
+}
+
+.obs-info { flex: 1; min-width: 0; }
+.obs-profesor { font-size: 0.78rem; font-weight: 700; color: #222324; }
+.obs-curso    { font-size: 0.68rem; color: #888; margin-top: 1px; }
+.obs-texto    { font-size: 0.8rem; color: #333; margin-top: 4px; line-height: 1.4; }
+
+.obs-empty {
+    padding: 28px 16px;
+    text-align: center;
+    color: #aaa;
+    font-size: 0.82rem;
+}
+
+/* Dark mode */
+body.dark-mode #obsPanel         { background: #16213e; border-color: #1a3a5a; }
+body.dark-mode .obs-item         { border-color: #1a3a5a; }
+body.dark-mode .obs-item:hover   { background: #1e2d4a; }
+body.dark-mode .obs-texto        { color: #ddd; }
+body.dark-mode .obs-curso        { color: #888; }
