@@ -375,12 +375,15 @@ async function load() {
     if (cached && cached.fresh) {
         _applyData(cached.data, false);
         if (loadingEl) loadingEl.style.display = 'none';
+        const mins = Math.round(cached.age / 60000);
+        updateSyncChip('cache', mins || 1);
         // Actualizar silenciosamente en background
         fetch(SCRIPT_URL).then(r => r.json()).then(data => {
             if (data.status === 'success') {
                 _saveSessionCache(data.data);
                 _applyData(data.data, true);
                 _hideOfflineBanner();
+                updateSyncChip('fresh', 0);
             }
         }).catch(() => {}); // fallo silencioso, ya tenemos datos
         return;
@@ -395,8 +398,9 @@ async function load() {
 
         if (data.status === 'success') {
             _saveSessionCache(data.data);
-            _applyConfig(data.config || null); // stock y docentes desde Sheets
+            _applyConfig(data.config || null);
             _hideOfflineBanner();
+            updateSyncChip('fresh', 0);
             console.log('✅ Datos cargados:', data.data.length, 'registros');
             
             Swal.fire({
@@ -423,6 +427,7 @@ async function load() {
             _applyData(stale.data, true);
             const mins = Math.round(stale.age / 60000);
             _showOfflineBanner(`Sin conexión — mostrando datos de hace ${mins} min.`);
+            updateSyncChip('offline', mins);
         } else if (error.message.includes('FETCH_ERROR') || error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
             Swal.fire({
                 icon: 'error',
@@ -597,7 +602,7 @@ function renderAll() {
             const badgeLab = isLab ? `<span class="badge badge-status me-1" style="background:linear-gradient(135deg,#6f42c1,#9b59b6);color:white;">🟣 LABORATORIO</span>` : '';
             const badgeEstado = `<span class="badge badge-status" style="background:${estadoColor};color:${estadoTextColor}">${estadoTexto}</span>`;
 
-            rows.push(`<tr class="${rowClass}" ondblclick="inlineEdit('${r.id}', this)" title="Doble clic para editar rápido">
+            rows.push(`<tr class="${rowClass}" data-id="${r.id}" ondblclick="inlineEdit('${r.id}', this)" title="Doble clic para editar rápido">
                 <td><span class="text-muted" style="font-size:0.78rem;">${r.fecha.split('-').reverse().slice(0, 2).join('/')}</span></td>
                 <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
                 <td>${r.curso}${r.curso === 'ELECTIVO' ? ' ' : (r.curso === 'Reemplazo' ? ' ' : '')}</td>
@@ -984,32 +989,24 @@ function irASemanaActual() {
 }
 
 function showPage(page) {
-    const pageReg = document.getElementById('pageRegistros');
-    const pageStat = document.getElementById('pageStats');
-    const btnReg = document.getElementById('btnPageRegistros');
-    const btnStat = document.getElementById('btnPageStats');
+    const pages  = ['registros', 'stats', 'anual'];
+    const btnIds = { registros: 'btnPageRegistros', stats: 'btnPageStats', anual: 'btnPageAnual' };
+
+    pages.forEach(p => {
+        const el  = document.getElementById('page' + p.charAt(0).toUpperCase() + p.slice(1));
+        const btn = document.getElementById(btnIds[p]);
+        const active = p === page;
+        if (el)  el.style.display  = active ? 'block' : 'none';
+        if (btn) {
+            btn.className = `btn btn-sm fw-bold px-3 ${active ? 'btn-page-active' : 'btn-page-idle'}`;
+        }
+    });
 
     if (page === 'stats') {
-        pageReg.style.display = 'none';
-        pageStat.style.display = 'block';
-        btnReg.style.background = 'white';
-        btnReg.style.color = '#555';
-        btnReg.style.border = '1.5px solid #ddd';
-        btnStat.style.background = '#0d6832';
-        btnStat.style.color = 'white';
-        btnStat.style.border = '1.5px solid #0d6832';
-        setTimeout(() => {
-            Object.values(charts).forEach(c => { if (c) c.resize(); });
-        }, 50);
-    } else {
-        pageStat.style.display = 'none';
-        pageReg.style.display = 'block';
-        btnStat.style.background = 'white';
-        btnStat.style.color = '#555';
-        btnStat.style.border = '1.5px solid #ddd';
-        btnReg.style.background = '#0d6832';
-        btnReg.style.color = 'white';
-        btnReg.style.border = '1.5px solid #0d6832';
+        setTimeout(() => Object.values(charts).forEach(c => { if (c) c.resize(); }), 50);
+    }
+    if (page === 'anual') {
+        renderResumenAnual();
     }
 }
 
@@ -1256,11 +1253,10 @@ async function saveData() {
         
         if (result.status === 'success') {
             sessionStorage.removeItem('franco_draft');
-            // Invalidar caché para que el próximo load() obtenga datos frescos
             sessionStorage.removeItem(CACHE_KEY);
             sessionStorage.removeItem(CACHE_TS);
             bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
-            
+
             Swal.fire({
                 icon: 'success',
                 title: `Registro ${payload.action === 'create' ? 'creado' : 'actualizado'} correctamente`,
@@ -1270,9 +1266,21 @@ async function saveData() {
                 toast: true,
                 position: 'top-end'
             });
-            
-            // Recargar los datos
-            setTimeout(() => load(), 500);
+
+            // Flash verde en la fila tras recargar
+            const _idGuardado = payload.id || result.id;
+            setTimeout(() => {
+                load().then(() => {
+                    setTimeout(() => {
+                        const tr = document.querySelector(`tr[data-id="${_idGuardado}"]`);
+                        if (tr) {
+                            tr.style.transition = 'background 0.3s';
+                            tr.style.background = '#d4edda';
+                            setTimeout(() => { tr.style.background = ''; }, 1400);
+                        }
+                    }, 300);
+                });
+            }, 300);
         } else {
             throw new Error(result.message || 'Error desconocido al guardar');
         }
@@ -2104,6 +2112,198 @@ async function generatePDF() {
         }); // fin chunk.docs.forEach
     }); // fin chunks.forEach
 
+    // ─── PÁGINA: COMPARATIVO MES A MES ───────────────────────────────────────
+    doc.addPage();
+
+    // Header verde
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("COMPARATIVO MES A MES — 2026", 14, 13);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-CL')} · Responsable: Franco San Martín`, 14, 20);
+
+    // Calcular datos de todos los meses del año con datos
+    const pdfMesesData = mNames.map((nombre, i) => {
+        const rows = db.filter(d => {
+            const dt = new Date(d.fecha + "T00:00:00");
+            return !isNaN(dt) && dt.getFullYear() === anioActual && dt.getMonth() === i;
+        });
+        if (rows.length === 0) return null;
+        const total  = rows.length;
+        const ok     = rows.filter(d => {
+            const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+            return t === parseInt(d.devueltos||0) && t > 0;
+        }).length;
+        const dmg    = rows.filter(d => isDamagedRecord(d)).length;
+        const lab    = rows.filter(d => d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true").length;
+        const reemp  = rows.filter(d => parseInt(d.reemplazo||0) > 0).length;
+        const tasa   = Math.round((ok / total) * 100);
+        const docs   = new Set(rows.map(d => d.profesor).filter(Boolean)).size;
+        return { nombre: nombre.slice(0, 3), mes: i, total, ok, dmg, lab, reemp, tasa, docs };
+    }).filter(Boolean);
+
+    if (pdfMesesData.length > 0) {
+        // ── Mini gráfico de barras comparativo ───────────────────────────────
+        const cmpBoxY = 27, cmpBoxH = 55;
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(14, cmpBoxY, 182, cmpBoxH, 2, 2, 'F');
+        doc.setDrawColor(220, 220, 220);
+        doc.roundedRect(14, cmpBoxY, 182, cmpBoxH, 2, 2, 'S');
+
+        const barW2  = Math.min(14, Math.floor(170 / pdfMesesData.length) - 3);
+        const gap2   = (170 - pdfMesesData.length * barW2) / (pdfMesesData.length + 1);
+        const maxT   = Math.max(...pdfMesesData.map(m => m.total), 1);
+        const plotH2 = 36, plotY2 = cmpBoxY + cmpBoxH - 14;
+        const mesActualIdx = viewDate.getMonth();
+
+        pdfMesesData.forEach((m, i) => {
+            const bx = 14 + gap2 + i * (barW2 + gap2);
+            const bh = (m.total / maxT) * plotH2;
+            const by = plotY2 - bh;
+
+            // Resaltar mes actual
+            const esMesActual = m.mes === mesActualIdx;
+            doc.setFillColor(esMesActual ? 13 : 180, esMesActual ? 104 : 220, esMesActual ? 50 : 200);
+            doc.roundedRect(bx, by, barW2, bh, 1, 1, 'F');
+
+            // Valor encima
+            doc.setFontSize(4.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(esMesActual ? 13 : 100, esMesActual ? 104 : 100, esMesActual ? 50 : 100);
+            doc.text(String(m.total), bx + barW2 / 2, by - 1.5, { align: 'center' });
+
+            // Label mes
+            doc.setFontSize(5);
+            doc.setFont("helvetica", esMesActual ? "bold" : "normal");
+            doc.setTextColor(esMesActual ? 13 : 80, esMesActual ? 104 : 80, esMesActual ? 50 : 80);
+            doc.text(m.nombre, bx + barW2 / 2, plotY2 + 5, { align: 'center' });
+
+            // Tasa como punto de color
+            const tasaY = plotY2 - (m.tasa / 100) * plotH2;
+            const tc = m.tasa >= 95 ? [25, 135, 84] : m.tasa >= 80 ? [243, 156, 18] : [220, 53, 69];
+            doc.setFillColor(...tc);
+            doc.circle(bx + barW2 / 2, tasaY, 1, 'F');
+        });
+
+        // Leyenda mini del gráfico
+        doc.setFillColor(180, 220, 200);
+        doc.rect(120, cmpBoxY + 4, 4, 3, 'F');
+        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+        doc.text("Préstamos", 126, cmpBoxY + 6.5);
+        doc.setFillColor(13, 104, 50);
+        doc.rect(150, cmpBoxY + 4, 4, 3, 'F');
+        doc.text("Mes actual", 156, cmpBoxY + 6.5);
+
+        // ── Tabla comparativa ─────────────────────────────────────────────────
+        const tblY = cmpBoxY + cmpBoxH + 5;
+        const cols = { mes: 14, tot: 46, delta: 66, tasa: 92, lab: 116, ree: 134, dmg: 152, docs: 170 };
+        const colW = 182;
+
+        // Header tabla
+        doc.setFillColor(0, 51, 102);
+        doc.rect(14, tblY, colW, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        [['MES', cols.mes], ['PRÉSTAMOS', cols.tot], ['VS ANT.', cols.delta],
+         ['TASA', cols.tasa], ['LAB.', cols.lab], ['REEMP.', cols.ree],
+         ['DAÑOS', cols.dmg], ['DOCENTES', cols.docs]
+        ].forEach(([label, x]) => doc.text(label, x + 2, tblY + 5.5));
+
+        // Filas
+        let ry = tblY + 8;
+        pdfMesesData.forEach((m, i) => {
+            const prev  = i > 0 ? pdfMesesData[i - 1] : null;
+            const delta = prev ? m.total - prev.total : null;
+            const esMesActual = m.mes === mesActualIdx;
+
+            // Fondo alternado o mes actual resaltado
+            if (esMesActual) {
+                doc.setFillColor(220, 240, 225);
+                doc.rect(14, ry, colW, 7.5, 'F');
+            } else if (i % 2 === 0) {
+                doc.setFillColor(248, 249, 250);
+                doc.rect(14, ry, colW, 7.5, 'F');
+            }
+
+            doc.setFontSize(5.5);
+            doc.setFont("helvetica", esMesActual ? "bold" : "normal");
+            doc.setTextColor(esMesActual ? 13 : 60, esMesActual ? 104 : 60, esMesActual ? 50 : 60);
+            doc.text(m.nombre + (esMesActual ? ' ◀' : ''), cols.mes + 2, ry + 5);
+
+            doc.setTextColor(13, 104, 50);
+            doc.setFont("helvetica", "bold");
+            doc.text(String(m.total), cols.tot + 2, ry + 5);
+
+            // Delta con color
+            if (delta !== null) {
+                doc.setTextColor(delta > 0 ? 25 : delta < 0 ? 220 : 100,
+                                 delta > 0 ? 135 : delta < 0 ? 53 : 100,
+                                 delta > 0 ? 84  : delta < 0 ? 69 : 100);
+                doc.text((delta > 0 ? '▲+' : delta < 0 ? '▼' : '=') + delta, cols.delta + 2, ry + 5);
+            } else {
+                doc.setTextColor(150, 150, 150);
+                doc.text('—', cols.delta + 2, ry + 5);
+            }
+
+            // Tasa con semáforo
+            const tc2 = m.tasa >= 95 ? [25,135,84] : m.tasa >= 80 ? [180,100,0] : [220,53,69];
+            doc.setTextColor(...tc2);
+            doc.setFont("helvetica", "bold");
+            doc.text(m.tasa + '%', cols.tasa + 2, ry + 5);
+
+            doc.setTextColor(80, 80, 80);
+            doc.setFont("helvetica", "normal");
+            doc.text(String(m.lab),  cols.lab  + 2, ry + 5);
+            doc.text(String(m.reemp),cols.ree  + 2, ry + 5);
+
+            doc.setTextColor(m.dmg > 0 ? 220 : 80, m.dmg > 0 ? 53 : 80, m.dmg > 0 ? 69 : 80);
+            doc.text(m.dmg > 0 ? String(m.dmg) : '✓', cols.dmg + 2, ry + 5);
+
+            doc.setTextColor(80, 80, 80);
+            doc.text(String(m.docs), cols.docs + 2, ry + 5);
+
+            // Línea separadora
+            doc.setDrawColor(235, 235, 235);
+            doc.setLineWidth(0.2);
+            doc.line(14, ry + 7.5, 196, ry + 7.5);
+
+            ry += 7.5;
+        });
+
+        // Fila total
+        const totT  = pdfMesesData.reduce((a, m) => a + m.total, 0);
+        const totOk = pdfMesesData.reduce((a, m) => a + m.ok, 0);
+        const totL  = pdfMesesData.reduce((a, m) => a + m.lab, 0);
+        const totR  = pdfMesesData.reduce((a, m) => a + m.reemp, 0);
+        const totD  = pdfMesesData.reduce((a, m) => a + m.dmg, 0);
+        const tasaG = totT > 0 ? Math.round((totOk / totT) * 100) : 0;
+        const docsG = new Set(db.filter(d => {
+            const dt = new Date(d.fecha + "T00:00:00");
+            return !isNaN(dt) && dt.getFullYear() === anioActual;
+        }).map(d => d.profesor).filter(Boolean)).size;
+
+        doc.setFillColor(0, 51, 102);
+        doc.rect(14, ry, colW, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        doc.text("TOTAL AÑO", cols.mes + 2, ry + 5.5);
+        doc.text(String(totT),      cols.tot + 2, ry + 5.5);
+        doc.text('—',              cols.delta + 2, ry + 5.5);
+        doc.text(tasaG + '%',      cols.tasa + 2, ry + 5.5);
+        doc.text(String(totL),     cols.lab  + 2, ry + 5.5);
+        doc.text(String(totR),     cols.ree  + 2, ry + 5.5);
+        doc.text(String(totD),     cols.dmg  + 2, ry + 5.5);
+        doc.text(String(docsG),    cols.docs + 2, ry + 5.5);
+    }
+
+    // El footer de esta página lo maneja el loop final junto con todas las demás
+
     // ─── PÁGINA: RESUMEN SEMANAL + ALERTAS ───────────────────────────────────
     doc.addPage();
 
@@ -2329,6 +2529,213 @@ function toggleObsPanel() {
     if (!visible) setTimeout(() => wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 }
 
+// ==================== RESUMEN ANUAL INTERACTIVO ====================
+let chartAnualResumen = null;
+
+function _calcMesData(mes) {
+    // mes: 0-indexed
+    const año = new Date().getFullYear();
+    const rows = db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === año && dt.getMonth() === mes;
+    });
+    const total   = rows.length;
+    const ok      = rows.filter(d => {
+        const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        return t === parseInt(d.devueltos||0) && t > 0;
+    }).length;
+    const dmg     = rows.filter(d => isDamagedRecord(d)).length;
+    const lab     = rows.filter(d => d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true").length;
+    const reemp   = rows.filter(d => parseInt(d.reemplazo||0) > 0).length;
+    const conObs  = rows.filter(d => {
+        const o = (d.observacion||'').trim().toLowerCase();
+        return o && !['sin novedad','ok',''].includes(o);
+    }).length;
+    const docentes = new Set(rows.map(d => d.profesor).filter(Boolean)).size;
+    const tasa    = total > 0 ? Math.round((ok / total) * 100) : 0;
+    return { total, ok, dmg, lab, reemp, conObs, docentes, tasa, rows };
+}
+
+function renderResumenAnual() {
+    const año = new Date().getFullYear();
+    const mesesConDatos = mNames.map((nombre, i) => ({ nombre, i, ..._calcMesData(i) }))
+        .filter(m => m.total > 0);
+
+    if (mesesConDatos.length === 0) {
+        document.getElementById('tablaAnualBody').innerHTML =
+            '<tr><td colspan="10" class="text-muted text-center py-4">Sin datos registrados este año</td></tr>';
+        return;
+    }
+
+    // ── Tabla comparativa ──────────────────────────────────────────────────────
+    let html = '';
+    mesesConDatos.forEach((m, idx) => {
+        const prev   = idx > 0 ? mesesConDatos[idx - 1] : null;
+        const delta  = prev ? m.total - prev.total : null;
+        const deltaHtml = delta === null ? '<span class="text-muted">—</span>'
+            : delta > 0  ? `<span class="text-success fw-bold">▲ +${delta}</span>`
+            : delta < 0  ? `<span class="text-danger fw-bold">▼ ${delta}</span>`
+            :               `<span class="text-muted">= 0</span>`;
+
+        const tasaColor = m.tasa >= 95 ? '#198754' : m.tasa >= 80 ? '#f39c12' : '#dc3545';
+        const tasaBadge = `<span class="badge fw-bold" style="background:${tasaColor};color:white;font-size:0.75rem;">${m.tasa}%</span>`;
+
+        html += `<tr style="cursor:pointer;" onclick="_irAMes(${m.i})" title="Ver ${m.nombre}">
+            <td class="fw-bold text-start ps-3">📅 ${m.nombre}</td>
+            <td><span class="fw-bold fs-6" style="color:#0d6832;">${m.total}</span></td>
+            <td>${deltaHtml}</td>
+            <td>${m.ok}</td>
+            <td>${tasaBadge}</td>
+            <td>${m.lab > 0 ? `<span class="badge" style="background:#6f42c1;color:white;">${m.lab}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.reemp > 0 ? `<span class="badge bg-warning text-dark">${m.reemp}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.dmg > 0 ? `<span class="badge bg-danger">${m.dmg}</span>` : '<span class="text-success">✓</span>'}</td>
+            <td>${m.conObs > 0 ? `<span class="badge" style="background:#d15502;color:white;">${m.conObs}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.docentes}</td>
+        </tr>`;
+    });
+
+    // Fila de totales
+    const tot = mesesConDatos.reduce((a, m) => ({
+        total: a.total + m.total, ok: a.ok + m.ok, dmg: a.dmg + m.dmg,
+        lab: a.lab + m.lab, reemp: a.reemp + m.reemp, conObs: a.conObs + m.conObs
+    }), { total:0, ok:0, dmg:0, lab:0, reemp:0, conObs:0 });
+    const tasaGlobal = tot.total > 0 ? Math.round((tot.ok / tot.total) * 100) : 0;
+    const docGlobal  = new Set(db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === año;
+    }).map(d => d.profesor).filter(Boolean)).size;
+
+    html += `<tr class="table-dark fw-bold">
+        <td class="text-start ps-3">🏆 TOTAL AÑO</td>
+        <td style="color:#6adc9e;">${tot.total}</td>
+        <td>—</td>
+        <td>${tot.ok}</td>
+        <td><span class="badge fw-bold" style="background:#198754;color:white;">${tasaGlobal}%</span></td>
+        <td>${tot.lab}</td><td>${tot.reemp}</td><td>${tot.dmg}</td>
+        <td>${tot.conObs}</td><td>${docGlobal}</td>
+    </tr>`;
+    document.getElementById('tablaAnualBody').innerHTML = html;
+
+    // ── KPIs totales ───────────────────────────────────────────────────────────
+    const kpiData = [
+        { label: 'Préstamos totales', value: tot.total,    color: '#0d6832' },
+        { label: 'Devueltos OK',       value: tot.ok,       color: '#198754' },
+        { label: 'Tasa global',        value: tasaGlobal+'%', color: tasaGlobal>=95?'#198754':'#f39c12' },
+        { label: 'Laboratorio',        value: tot.lab,      color: '#6f42c1' },
+        { label: 'Reemplazos',         value: tot.reemp,    color: '#dc3545' },
+        { label: 'Con daños',          value: tot.dmg,      color: '#c62828' },
+        { label: 'Observaciones',      value: tot.conObs,   color: '#d15502' },
+        { label: 'Docentes activos',   value: docGlobal,    color: '#003366' },
+        { label: 'Meses con datos',    value: mesesConDatos.length, color: '#0288d1' },
+    ];
+    document.getElementById('kpiAnualRow').innerHTML = kpiData.map(k => `
+        <div class="kpi-card">
+            <h6>${k.label}</h6>
+            <div class="kpi-value" style="color:${k.color};font-size:1.9rem;">${k.value}</div>
+        </div>`).join('');
+
+    // ── Gráfico combinado barras + línea ───────────────────────────────────────
+    const labels  = mesesConDatos.map(m => m.nombre.slice(0, 3));
+    const totales = mesesConDatos.map(m => m.total);
+    const tasas   = mesesConDatos.map(m => m.tasa);
+    const danados = mesesConDatos.map(m => m.dmg);
+
+    const ctx = document.getElementById('chartAnualResumen');
+    if (ctx) {
+        if (chartAnualResumen) chartAnualResumen.destroy();
+        chartAnualResumen = new Chart(ctx, {
+            data: {
+                labels,
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Préstamos',
+                        data: totales,
+                        backgroundColor: 'rgba(13,104,50,0.75)',
+                        borderRadius: 6,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Dañados',
+                        data: danados,
+                        backgroundColor: 'rgba(198,40,40,0.7)',
+                        borderRadius: 6,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'line',
+                        label: 'Tasa Retorno %',
+                        data: tasas,
+                        borderColor: '#1976d2',
+                        backgroundColor: 'rgba(25,118,210,0.1)',
+                        borderWidth: 2.5,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#1976d2',
+                        tension: 0.3,
+                        fill: true,
+                        yAxisID: 'y2'
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ctx.dataset.label === 'Tasa Retorno %'
+                                ? ` ${ctx.parsed.y}%`
+                                : ` ${ctx.parsed.y} registros`
+                        }
+                    }
+                },
+                scales: {
+                    y:  { beginAtZero: true, position: 'left',  title: { display: true, text: 'Préstamos' }, ticks: { stepSize: 10 } },
+                    y2: { beginAtZero: true, position: 'right', max: 100, title: { display: true, text: 'Tasa %' },
+                          grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
+                }
+            }
+        });
+    }
+}
+
+function _irAMes(mesIdx) {
+    viewDate = new Date(new Date().getFullYear(), mesIdx, 1);
+    currentWeek = 0;
+    filterMode  = 'all';
+    showPage('registros');
+    renderAll();
+    renderAnualChart();
+    // Scroll suave al inicio
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+}
+
+// ==================== CHIP DE SINCRONIZACIÓN ====================
+function updateSyncChip(estado, mins) {
+    const chip  = document.getElementById('syncChip');
+    const dot   = chip?.querySelector('.sync-dot');
+    const label = chip?.querySelector('.sync-label');
+    if (!chip) return;
+
+    chip.className = 'sync-chip';
+    if (estado === 'fresh') {
+        chip.classList.add('sync-fresh');
+        label.textContent = mins <= 1 ? '🟢 Sincronizado' : `🟢 hace ${mins} min`;
+    } else if (estado === 'cache') {
+        chip.classList.add('sync-cache');
+        label.textContent = `🟡 Caché · hace ${mins} min`;
+    } else if (estado === 'offline') {
+        chip.classList.add('sync-offline');
+        label.textContent = '🔴 Sin conexión';
+    } else {
+        chip.classList.add('sync-loading');
+        label.textContent = 'Cargando...';
+    }
+}
+
 // ==================== MODO OSCURO ====================
 function toggleDarkMode() {
     const isDark = document.body.classList.toggle('dark-mode');
@@ -2372,4 +2779,17 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-window.onload = () => { _restoreDarkMode(); load(); };
+window.onload = () => {
+    _restoreDarkMode();
+    load();
+    // Actualizar el chip de sincronización cada 60 segundos
+    setInterval(() => {
+        const chip = document.getElementById('syncChip');
+        if (!chip || chip.classList.contains('sync-offline') || chip.classList.contains('sync-loading')) return;
+        const ts = parseInt(sessionStorage.getItem(CACHE_TS) || '0');
+        if (!ts) return;
+        const mins = Math.round((Date.now() - ts) / 60000);
+        const esFresco = (Date.now() - ts) < CACHE_TTL;
+        updateSyncChip(esFresco ? 'fresh' : 'cache', mins);
+    }, 60000);
+};
