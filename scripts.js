@@ -2112,197 +2112,377 @@ async function generatePDF() {
         }); // fin chunk.docs.forEach
     }); // fin chunks.forEach
 
-    // ─── PÁGINA: COMPARATIVO MES A MES ───────────────────────────────────────
+    // ─── PÁGINAS: CONSOLIDADO COMPARATIVO MES ACTUAL vs MES ANTERIOR ────────
+    // ── Datos del mes actual y del mes anterior ───────────────────────────────
+    const mesActualIdx  = viewDate.getMonth();
+    const mesAnteriorIdx = mesActualIdx > 0 ? mesActualIdx - 1 : null;
+    const mesAnteriorNombre = mesAnteriorIdx !== null ? mNames[mesAnteriorIdx] : null;
+
+    const _rowsMesAct = db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === anioActual && dt.getMonth() === mesActualIdx;
+    });
+    const _rowsMesAnt = mesAnteriorIdx !== null ? db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === anioActual && dt.getMonth() === mesAnteriorIdx;
+    }) : [];
+
+    const _calcStats = rows => {
+        const total = rows.length;
+        const ok    = rows.filter(d => {
+            const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+            return t === parseInt(d.devueltos||0) && t > 0;
+        }).length;
+        const dmg   = rows.filter(d => isDamagedRecord(d)).length;
+        const lab   = rows.filter(d => d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true").length;
+        const reemp = rows.filter(d => parseInt(d.reemplazo||0) > 0).length;
+        const pend  = rows.filter(d => {
+            const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+            return t > parseInt(d.devueltos||0) && !isDamagedRecord(d);
+        }).length;
+        const tasa  = total > 0 ? Math.round((ok / total) * 100) : 0;
+        const docs  = new Set(rows.map(d => d.profesor).filter(Boolean)).size;
+        return { total, ok, dmg, lab, reemp, pend, tasa, docs };
+    };
+
+    const stAct = _calcStats(_rowsMesAct);
+    const stAnt = _calcStats(_rowsMesAnt);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PÁGINA A — MÉTRICAS COMPARATIVAS + GRÁFICO
+    // ══════════════════════════════════════════════════════════════════════════
     doc.addPage();
 
-    // Header verde
+    // Header azul institucional
     doc.setFillColor(0, 51, 102);
     doc.rect(0, 0, 210, 22, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setFont("helvetica", "bold");
-    doc.text("COMPARATIVO MES A MES — 2026", 14, 13);
+    const titComp = mesAnteriorNombre
+        ? `CONSOLIDADO: ${mesActual.toUpperCase()} vs ${mesAnteriorNombre.toUpperCase()} ${anioActual}`
+        : `CONSOLIDADO: ${mesActual.toUpperCase()} ${anioActual}`;
+    doc.text(titComp, 14, 13);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.text(`Generado: ${new Date().toLocaleDateString('es-CL')} · Responsable: Franco San Martín`, 14, 20);
 
-    // Calcular datos de todos los meses del año con datos
-    const pdfMesesData = mNames.map((nombre, i) => {
-        const rows = db.filter(d => {
-            const dt = new Date(d.fecha + "T00:00:00");
-            return !isNaN(dt) && dt.getFullYear() === anioActual && dt.getMonth() === i;
-        });
-        if (rows.length === 0) return null;
-        const total  = rows.length;
-        const ok     = rows.filter(d => {
-            const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
-            return t === parseInt(d.devueltos||0) && t > 0;
-        }).length;
-        const dmg    = rows.filter(d => isDamagedRecord(d)).length;
-        const lab    = rows.filter(d => d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true").length;
-        const reemp  = rows.filter(d => parseInt(d.reemplazo||0) > 0).length;
-        const tasa   = Math.round((ok / total) * 100);
-        const docs   = new Set(rows.map(d => d.profesor).filter(Boolean)).size;
-        return { nombre: nombre.slice(0, 3), mes: i, total, ok, dmg, lab, reemp, tasa, docs };
-    }).filter(Boolean);
+    // ── Gráfico de barras lado a lado ─────────────────────────────────────────
+    const grfY = 27, grfH = 52, grfX0 = 14, grfW = 88;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(grfX0, grfY, grfW, grfH, 2, 2, 'F');
+    doc.setDrawColor(220, 220, 220);
+    doc.roundedRect(grfX0, grfY, grfW, grfH, 2, 2, 'S');
 
-    if (pdfMesesData.length > 0) {
-        // ── Mini gráfico de barras comparativo ───────────────────────────────
-        const cmpBoxY = 27, cmpBoxH = 55;
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(14, cmpBoxY, 182, cmpBoxH, 2, 2, 'F');
-        doc.setDrawColor(220, 220, 220);
-        doc.roundedRect(14, cmpBoxY, 182, cmpBoxH, 2, 2, 'S');
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(44, 62, 80);
+    doc.text("COMPARACIÓN DE PRÉSTAMOS", grfX0 + grfW / 2, grfY + 6, { align: 'center' });
 
-        const barW2  = Math.min(14, Math.floor(170 / pdfMesesData.length) - 3);
-        const gap2   = (170 - pdfMesesData.length * barW2) / (pdfMesesData.length + 1);
-        const maxT   = Math.max(...pdfMesesData.map(m => m.total), 1);
-        const plotH2 = 36, plotY2 = cmpBoxY + cmpBoxH - 14;
-        const mesActualIdx = viewDate.getMonth();
+    const plotH = 28, plotY = grfY + grfH - 12;
+    const maxValCmp = Math.max(stAct.total, stAnt.total, 1);
+    const bW = 18;
 
-        pdfMesesData.forEach((m, i) => {
-            const bx = 14 + gap2 + i * (barW2 + gap2);
-            const bh = (m.total / maxT) * plotH2;
-            const by = plotY2 - bh;
-
-            // Resaltar mes actual
-            const esMesActual = m.mes === mesActualIdx;
-            doc.setFillColor(esMesActual ? 13 : 180, esMesActual ? 104 : 220, esMesActual ? 50 : 200);
-            doc.roundedRect(bx, by, barW2, bh, 1, 1, 'F');
-
-            // Valor encima
-            doc.setFontSize(4.5);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(esMesActual ? 13 : 100, esMesActual ? 104 : 100, esMesActual ? 50 : 100);
-            doc.text(String(m.total), bx + barW2 / 2, by - 1.5, { align: 'center' });
-
-            // Label mes
-            doc.setFontSize(5);
-            doc.setFont("helvetica", esMesActual ? "bold" : "normal");
-            doc.setTextColor(esMesActual ? 13 : 80, esMesActual ? 104 : 80, esMesActual ? 50 : 80);
-            doc.text(m.nombre, bx + barW2 / 2, plotY2 + 5, { align: 'center' });
-
-            // Tasa como punto de color
-            const tasaY = plotY2 - (m.tasa / 100) * plotH2;
-            const tc = m.tasa >= 95 ? [25, 135, 84] : m.tasa >= 80 ? [243, 156, 18] : [220, 53, 69];
-            doc.setFillColor(...tc);
-            doc.circle(bx + barW2 / 2, tasaY, 1, 'F');
-        });
-
-        // Leyenda mini del gráfico
-        doc.setFillColor(180, 220, 200);
-        doc.rect(120, cmpBoxY + 4, 4, 3, 'F');
-        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
-        doc.text("Préstamos", 126, cmpBoxY + 6.5);
-        doc.setFillColor(13, 104, 50);
-        doc.rect(150, cmpBoxY + 4, 4, 3, 'F');
-        doc.text("Mes actual", 156, cmpBoxY + 6.5);
-
-        // ── Tabla comparativa ─────────────────────────────────────────────────
-        const tblY = cmpBoxY + cmpBoxH + 5;
-        const cols = { mes: 14, tot: 46, delta: 66, tasa: 92, lab: 116, ree: 134, dmg: 152, docs: 170 };
-        const colW = 182;
-
-        // Header tabla
-        doc.setFillColor(0, 51, 102);
-        doc.rect(14, tblY, colW, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(5.5);
-        doc.setFont("helvetica", "bold");
-        [['MES', cols.mes], ['PRÉSTAMOS', cols.tot], ['VS ANT.', cols.delta],
-         ['TASA', cols.tasa], ['LAB.', cols.lab], ['REEMP.', cols.ree],
-         ['DAÑOS', cols.dmg], ['DOCENTES', cols.docs]
-        ].forEach(([label, x]) => doc.text(label, x + 2, tblY + 5.5));
-
-        // Filas
-        let ry = tblY + 8;
-        pdfMesesData.forEach((m, i) => {
-            const prev  = i > 0 ? pdfMesesData[i - 1] : null;
-            const delta = prev ? m.total - prev.total : null;
-            const esMesActual = m.mes === mesActualIdx;
-
-            // Fondo alternado o mes actual resaltado
-            if (esMesActual) {
-                doc.setFillColor(220, 240, 225);
-                doc.rect(14, ry, colW, 7.5, 'F');
-            } else if (i % 2 === 0) {
-                doc.setFillColor(248, 249, 250);
-                doc.rect(14, ry, colW, 7.5, 'F');
-            }
-
-            doc.setFontSize(5.5);
-            doc.setFont("helvetica", esMesActual ? "bold" : "normal");
-            doc.setTextColor(esMesActual ? 13 : 60, esMesActual ? 104 : 60, esMesActual ? 50 : 60);
-            doc.text(m.nombre + (esMesActual ? ' ◀' : ''), cols.mes + 2, ry + 5);
-
-            doc.setTextColor(13, 104, 50);
-            doc.setFont("helvetica", "bold");
-            doc.text(String(m.total), cols.tot + 2, ry + 5);
-
-            // Delta con color
-            if (delta !== null) {
-                doc.setTextColor(delta > 0 ? 25 : delta < 0 ? 220 : 100,
-                                 delta > 0 ? 135 : delta < 0 ? 53 : 100,
-                                 delta > 0 ? 84  : delta < 0 ? 69 : 100);
-                doc.text((delta > 0 ? '▲+' : delta < 0 ? '▼' : '=') + delta, cols.delta + 2, ry + 5);
-            } else {
-                doc.setTextColor(150, 150, 150);
-                doc.text('—', cols.delta + 2, ry + 5);
-            }
-
-            // Tasa con semáforo
-            const tc2 = m.tasa >= 95 ? [25,135,84] : m.tasa >= 80 ? [180,100,0] : [220,53,69];
-            doc.setTextColor(...tc2);
-            doc.setFont("helvetica", "bold");
-            doc.text(m.tasa + '%', cols.tasa + 2, ry + 5);
-
-            doc.setTextColor(80, 80, 80);
-            doc.setFont("helvetica", "normal");
-            doc.text(String(m.lab),  cols.lab  + 2, ry + 5);
-            doc.text(String(m.reemp),cols.ree  + 2, ry + 5);
-
-            doc.setTextColor(m.dmg > 0 ? 220 : 80, m.dmg > 0 ? 53 : 80, m.dmg > 0 ? 69 : 80);
-            doc.text(m.dmg > 0 ? String(m.dmg) : '✓', cols.dmg + 2, ry + 5);
-
-            doc.setTextColor(80, 80, 80);
-            doc.text(String(m.docs), cols.docs + 2, ry + 5);
-
-            // Línea separadora
-            doc.setDrawColor(235, 235, 235);
-            doc.setLineWidth(0.2);
-            doc.line(14, ry + 7.5, 196, ry + 7.5);
-
-            ry += 7.5;
-        });
-
-        // Fila total
-        const totT  = pdfMesesData.reduce((a, m) => a + m.total, 0);
-        const totOk = pdfMesesData.reduce((a, m) => a + m.ok, 0);
-        const totL  = pdfMesesData.reduce((a, m) => a + m.lab, 0);
-        const totR  = pdfMesesData.reduce((a, m) => a + m.reemp, 0);
-        const totD  = pdfMesesData.reduce((a, m) => a + m.dmg, 0);
-        const tasaG = totT > 0 ? Math.round((totOk / totT) * 100) : 0;
-        const docsG = new Set(db.filter(d => {
-            const dt = new Date(d.fecha + "T00:00:00");
-            return !isNaN(dt) && dt.getFullYear() === anioActual;
-        }).map(d => d.profesor).filter(Boolean)).size;
-
-        doc.setFillColor(0, 51, 102);
-        doc.rect(14, ry, colW, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(5.5);
-        doc.setFont("helvetica", "bold");
-        doc.text("TOTAL AÑO", cols.mes + 2, ry + 5.5);
-        doc.text(String(totT),      cols.tot + 2, ry + 5.5);
-        doc.text('—',              cols.delta + 2, ry + 5.5);
-        doc.text(tasaG + '%',      cols.tasa + 2, ry + 5.5);
-        doc.text(String(totL),     cols.lab  + 2, ry + 5.5);
-        doc.text(String(totR),     cols.ree  + 2, ry + 5.5);
-        doc.text(String(totD),     cols.dmg  + 2, ry + 5.5);
-        doc.text(String(docsG),    cols.docs + 2, ry + 5.5);
+    // Barra mes anterior
+    if (mesAnteriorNombre) {
+        const bhAnt = (stAnt.total / maxValCmp) * plotH;
+        doc.setFillColor(159, 213, 184);
+        doc.roundedRect(grfX0 + 18, plotY - bhAnt, bW, bhAnt, 1, 1, 'F');
+        doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 120, 80);
+        doc.text(String(stAnt.total), grfX0 + 18 + bW / 2, plotY - bhAnt - 2, { align: 'center' });
+        doc.setFontSize(5); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+        doc.text(mesAnteriorNombre.slice(0, 3), grfX0 + 18 + bW / 2, plotY + 5, { align: 'center' });
     }
 
-    // El footer de esta página lo maneja el loop final junto con todas las demás
+    // Barra mes actual
+    const bhAct = (stAct.total / maxValCmp) * plotH;
+    doc.setFillColor(13, 104, 50);
+    doc.roundedRect(grfX0 + 50, plotY - bhAct, bW, bhAct, 1, 1, 'F');
+    doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(13, 104, 50);
+    doc.text(String(stAct.total), grfX0 + 50 + bW / 2, plotY - bhAct - 2, { align: 'center' });
+    doc.setFontSize(5); doc.setFont("helvetica", "bold"); doc.setTextColor(13, 104, 50);
+    doc.text(mesActual.slice(0, 3) + ' ◀', grfX0 + 50 + bW / 2, plotY + 5, { align: 'center' });
+
+    // % crecimiento si hay mes anterior
+    if (mesAnteriorNombre && stAnt.total > 0) {
+        const pctCrec = Math.round(((stAct.total - stAnt.total) / stAnt.total) * 100);
+        const crecColor = pctCrec >= 0 ? [25, 135, 84] : [220, 53, 69];
+        doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(...crecColor);
+        doc.text((pctCrec >= 0 ? '▲' : '▼') + Math.abs(pctCrec) + '%', grfX0 + grfW / 2, grfY + grfH - 4, { align: 'center' });
+    }
+
+    // ── Tabla de métricas comparativas ───────────────────────────────────────
+    const tblX = 14 + grfW + 5, tblW = 210 - tblX - 14;
+    const metricas = [
+        { label: 'Préstamos totales', act: stAct.total,  ant: stAnt.total,  fmt: v => String(v),  color: [13, 104, 50],  mejora: 'mayor' },
+        { label: 'Devueltos OK',      act: stAct.ok,     ant: stAnt.ok,     fmt: v => String(v),  color: [25, 135, 84],  mejora: 'mayor' },
+        { label: 'Tasa de retorno',   act: stAct.tasa,   ant: stAnt.tasa,   fmt: v => v + '%',    color: [25, 135, 84],  mejora: 'mayor' },
+        { label: 'Laboratorio',       act: stAct.lab,    ant: stAnt.lab,    fmt: v => String(v),  color: [111, 66, 193], mejora: 'neutro' },
+        { label: 'Reemplazos',        act: stAct.reemp,  ant: stAnt.reemp,  fmt: v => String(v),  color: [220, 53, 69],  mejora: 'menor' },
+        { label: 'Dañados',           act: stAct.dmg,    ant: stAnt.dmg,    fmt: v => v === 0 ? '✓' : String(v), color: [198, 40, 40], mejora: 'menor' },
+        { label: 'Docentes activos',  act: stAct.docs,   ant: stAnt.docs,   fmt: v => String(v),  color: [13, 104, 50],  mejora: 'mayor' },
+        { label: 'Pendientes',        act: stAct.pend,   ant: stAnt.pend,   fmt: v => v === 0 ? '✓' : String(v), color: [245, 124, 0], mejora: 'menor' },
+    ];
+
+    // Header tabla
+    doc.setFillColor(0, 51, 102);
+    doc.rect(tblX, grfY, tblW, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(5.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("MÉTRICA", tblX + 2, grfY + 5.5);
+    if (mesAnteriorNombre) doc.text(mesAnteriorNombre.slice(0, 3).toUpperCase(), tblX + tblW * 0.52, grfY + 5.5, { align: 'center' });
+    doc.text(mesActual.slice(0, 3).toUpperCase(), tblX + tblW * 0.70, grfY + 5.5, { align: 'center' });
+    doc.text("VAR.", tblX + tblW * 0.86, grfY + 5.5, { align: 'center' });
+
+    let mry = grfY + 8;
+    metricas.forEach((m, i) => {
+        const rowH = 5.8;
+        if (i % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(tblX, mry, tblW, rowH, 'F'); }
+
+        doc.setFontSize(5.2); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+        doc.text(m.label, tblX + 2, mry + 3.8);
+
+        if (mesAnteriorNombre) {
+            doc.setTextColor(120, 120, 120);
+            doc.text(m.fmt(m.ant), tblX + tblW * 0.52, mry + 3.8, { align: 'center' });
+        }
+
+        doc.setTextColor(...m.color);
+        doc.setFont("helvetica", "bold");
+        doc.text(m.fmt(m.act), tblX + tblW * 0.70, mry + 3.8, { align: 'center' });
+
+        if (mesAnteriorNombre) {
+            const delta = m.act - m.ant;
+            const mejora = m.mejora === 'mayor' ? delta > 0 : m.mejora === 'menor' ? delta < 0 : null;
+            const varColor = mejora === true ? [25, 135, 84] : mejora === false ? [220, 53, 69] : [120, 120, 120];
+            doc.setTextColor(...varColor);
+            const varStr = delta === 0 ? '=' : (delta > 0 ? '▲+' : '▼') + (m.mejora === 'mayor' || m.mejora === 'menor' ? Math.abs(delta) + (m.label.includes('Tasa') ? '%' : '') : Math.abs(delta));
+            doc.text(varStr, tblX + tblW * 0.86, mry + 3.8, { align: 'center' });
+        }
+
+        doc.setDrawColor(235, 235, 235); doc.setLineWidth(0.2);
+        doc.line(tblX, mry + rowH, tblX + tblW, mry + rowH);
+        mry += rowH;
+    });
+
+    // ── 3 KPIs destacados bajo el gráfico y la tabla ─────────────────────────
+    const kpiY2 = grfY + grfH + 5;
+    const kpis2 = [
+        {
+            label: 'Mejor indicador del mes',
+            val: `Tasa ${stAct.tasa}%`,
+            sub: mesAnteriorNombre ? (stAct.tasa >= stAnt.tasa ? `▲ +${stAct.tasa - stAnt.tasa}% vs ${mesAnteriorNombre.slice(0,3)}` : `▼ ${stAct.tasa - stAnt.tasa}% vs ${mesAnteriorNombre.slice(0,3)}`) : '',
+            bg: [240, 255, 244], border: [129, 199, 132], tc: [13, 104, 50]
+        },
+        {
+            label: 'Crecimiento en préstamos',
+            val: mesAnteriorNombre && stAnt.total > 0 ? (Math.round(((stAct.total - stAnt.total) / stAnt.total) * 100) >= 0 ? '+' : '') + Math.round(((stAct.total - stAnt.total) / stAnt.total) * 100) + '%' : stAct.total + ' total',
+            sub: mesAnteriorNombre ? `${stAnt.total} → ${stAct.total} préstamos` : `${stAct.total} préstamos`,
+            bg: [255, 248, 225], border: [255, 193, 7], tc: [133, 100, 4]
+        },
+        {
+            label: 'Atención: reemplazos',
+            val: String(stAct.reemp),
+            sub: mesAnteriorNombre ? (stAct.reemp > stAnt.reemp ? `▲ +${stAct.reemp - stAnt.reemp} vs ${mesAnteriorNombre.slice(0,3)}` : stAct.reemp < stAnt.reemp ? `▼ ${stAct.reemp - stAnt.reemp} vs ${mesAnteriorNombre.slice(0,3)}` : `Igual que ${mesAnteriorNombre.slice(0,3)}`) : `${stAct.reemp} reemplazos`,
+            bg: [252, 228, 236], border: [239, 154, 154], tc: [198, 40, 40]
+        }
+    ];
+    const kpiW2 = (182 - 10) / 3;
+    kpis2.forEach((k, i) => {
+        const kx = 14 + i * (kpiW2 + 5);
+        doc.setFillColor(...k.bg); doc.roundedRect(kx, kpiY2, kpiW2, 18, 2, 2, 'F');
+        doc.setDrawColor(...k.border); doc.setLineWidth(0.4); doc.roundedRect(kx, kpiY2, kpiW2, 18, 2, 2, 'S');
+        doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(...k.tc);
+        doc.text(k.label.toUpperCase(), kx + kpiW2 / 2, kpiY2 + 5.5, { align: 'center' });
+        doc.setFontSize(9); doc.text(k.val, kx + kpiW2 / 2, kpiY2 + 12, { align: 'center' });
+        doc.setFontSize(5); doc.setFont("helvetica", "normal");
+        doc.text(k.sub, kx + kpiW2 / 2, kpiY2 + 16.5, { align: 'center' });
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PÁGINA(S) B — CONSOLIDADO DE DOCENTES (todos, con paginación automática)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Construir tabla de docentes: todos los del mes actual, ordenados por total desc
+    const _docsAct = {};
+    _rowsMesAct.forEach(d => {
+        const p = (d.profesor || '').trim();
+        if (!p) return;
+        if (!_docsAct[p]) _docsAct[p] = { total: 0, ok: 0, lab: 0, reemp: 0, dmg: 0 };
+        _docsAct[p].total++;
+        const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        if (t === parseInt(d.devueltos||0) && t > 0) _docsAct[p].ok++;
+        if (d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true") _docsAct[p].lab++;
+        if (parseInt(d.reemplazo||0) > 0) _docsAct[p].reemp++;
+        if (isDamagedRecord(d)) _docsAct[p].dmg++;
+    });
+
+    const _docsAntSet = new Set(_rowsMesAnt.map(d => (d.profesor || '').trim()).filter(Boolean));
+    const _docsAntCount = {};
+    _rowsMesAnt.forEach(d => {
+        const p = (d.profesor || '').trim();
+        if (!p) return;
+        _docsAntCount[p] = (_docsAntCount[p] || 0) + 1;
+    });
+
+    const docsTabla = Object.entries(_docsAct)
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(([nombre, v]) => ({
+            nombre,
+            ...v,
+            ant: _docsAntCount[nombre] || 0,
+            esNuevo: !_docsAntSet.has(nombre)
+        }));
+
+    const maxDocTotal = docsTabla.length > 0 ? docsTabla[0].total : 1;
+
+    // Paginación: caben ~28 filas por página (7px cada una)
+    const DOCFILA_H    = 7;
+    const DOCHDR_H     = 22; // header verde de continuación
+    const DOCFOOT_SAFE = 278;
+    const DOCCONTENT_FIRST = 100; // en la primera página empieza más abajo (debajo de los KPIs)
+    const DOCCONTENT_CONT  = DOCHDR_H + 14;
+    const MAX_ROWS_DOC_FIRST = Math.floor((DOCFOOT_SAFE - DOCCONTENT_FIRST) / DOCFILA_H);
+    const MAX_ROWS_DOC_CONT  = Math.floor((DOCFOOT_SAFE - DOCCONTENT_CONT) / DOCFILA_H);
+
+    // Dividir en chunks
+    const docChunks = [];
+    if (docsTabla.length <= MAX_ROWS_DOC_FIRST) {
+        docChunks.push({ rows: docsTabla, isFirst: true });
+    } else {
+        docChunks.push({ rows: docsTabla.slice(0, MAX_ROWS_DOC_FIRST), isFirst: true });
+        let idx = MAX_ROWS_DOC_FIRST;
+        while (idx < docsTabla.length) {
+            docChunks.push({ rows: docsTabla.slice(idx, idx + MAX_ROWS_DOC_CONT), isFirst: false });
+            idx += MAX_ROWS_DOC_CONT;
+        }
+    }
+
+    // Función que dibuja el header de la tabla de docentes
+    const _drawDocHeader = (y) => {
+        doc.setFillColor(13, 104, 50);
+        doc.rect(14, y, 182, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        const dcols = { n: 14, nombre: 22, ant: 90, act: 108, var: 124, lab: 140, remp: 155, dmg: 168, barra: 178 };
+        doc.text('#',                dcols.n     + 1, y + 5.5);
+        doc.text('DOCENTE',          dcols.nombre + 1, y + 5.5);
+        doc.text(mesAnteriorNombre ? mesAnteriorNombre.slice(0,3).toUpperCase() : '—', dcols.ant + 4, y + 5.5, { align: 'center' });
+        doc.text(mesActual.slice(0,3).toUpperCase(), dcols.act + 4, y + 5.5, { align: 'center' });
+        doc.text('VAR.', dcols.var + 4, y + 5.5, { align: 'center' });
+        doc.text('LAB', dcols.lab + 4,  y + 5.5, { align: 'center' });
+        doc.text('REEMP', dcols.remp + 3, y + 5.5, { align: 'center' });
+        doc.text('DAÑO', dcols.dmg + 3,  y + 5.5, { align: 'center' });
+        doc.text('BARRA', dcols.barra + 5, y + 5.5, { align: 'center' });
+        return dcols;
+    };
+
+    docChunks.forEach((chunk, ci) => {
+        // Nueva página para continuación (o agregar a la página actual si es first)
+        if (!chunk.isFirst) {
+            doc.addPage();
+            doc.setFillColor(0, 51, 102);
+            doc.rect(0, 0, DOCHDR_H, 210, 'F'); // NO — rect horizontal
+            doc.setFillColor(0, 51, 102);
+            doc.rect(0, 0, 210, DOCHDR_H, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12); doc.setFont("helvetica", "bold");
+            doc.text(`CONSOLIDADO DOCENTES — ${mesActual.toUpperCase()} vs ${mesAnteriorNombre || ''}  (cont. ${ci + 1}/${docChunks.length})`, 14, 14);
+            doc.setFontSize(8); doc.setFont("helvetica", "normal");
+            doc.text(`${anioActual} · Franco San Martín`, 14, 20);
+        }
+
+        const startY  = chunk.isFirst ? kpiY2 + 24 : DOCCONTENT_CONT;
+        const dcols   = _drawDocHeader(startY);
+        let   dry     = startY + 8;
+
+        chunk.rows.forEach((d, i) => {
+            // Fondo: naranja suave para docentes nuevos, alternado para el resto
+            if (d.esNuevo) {
+                doc.setFillColor(255, 237, 213); // naranja muy suave
+            } else if (i % 2 === 0) {
+                doc.setFillColor(248, 249, 250);
+            } else {
+                doc.setFillColor(255, 255, 255);
+            }
+            doc.rect(14, dry, 182, DOCFILA_H, 'F');
+
+            // Número de orden global
+            const nGlobal = (ci === 0 ? 0 : MAX_ROWS_DOC_FIRST + (ci - 1) * MAX_ROWS_DOC_CONT) + i + 1;
+            doc.setFontSize(5); doc.setFont("helvetica", "normal");
+            doc.setTextColor(150, 150, 150);
+            doc.text(String(nGlobal), dcols.n + 1, dry + 4.5);
+
+            // Nombre — naranja si es nuevo
+            if (d.esNuevo) {
+                doc.setFillColor(230, 81, 0);
+                doc.roundedRect(dcols.nombre, dry + 1, 64, 5, 0.8, 0.8, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFont("helvetica", "bold");
+                doc.text('★ ' + d.nombre, dcols.nombre + 1, dry + 4.8);
+            } else {
+                doc.setTextColor(50, 50, 50);
+                doc.setFont("helvetica", "normal");
+                doc.text(d.nombre, dcols.nombre + 1, dry + 4.8);
+            }
+
+            // Mes anterior
+            doc.setTextColor(150, 150, 150);
+            doc.setFont("helvetica", "normal");
+            doc.text(d.ant > 0 ? String(d.ant) : '—', dcols.ant + 4, dry + 4.8, { align: 'center' });
+
+            // Mes actual
+            doc.setTextColor(13, 104, 50);
+            doc.setFont("helvetica", "bold");
+            doc.text(String(d.total), dcols.act + 4, dry + 4.8, { align: 'center' });
+
+            // Variación
+            const delta = d.total - d.ant;
+            if (d.esNuevo) {
+                doc.setTextColor(230, 81, 0);
+                doc.text('NUEVO', dcols.var + 4, dry + 4.8, { align: 'center' });
+            } else {
+                const vc = delta > 0 ? [25,135,84] : delta < 0 ? [220,53,69] : [150,150,150];
+                doc.setTextColor(...vc);
+                doc.text(delta === 0 ? '=' : (delta > 0 ? '+' : '') + delta, dcols.var + 4, dry + 4.8, { align: 'center' });
+            }
+
+            // Lab, Reemp, Daño
+            doc.setTextColor(111, 66, 193); doc.setFont("helvetica", "normal");
+            doc.text(d.lab > 0 ? String(d.lab) : '—', dcols.lab + 4, dry + 4.8, { align: 'center' });
+            doc.setTextColor(220, 53, 69);
+            doc.text(d.reemp > 0 ? String(d.reemp) : '—', dcols.remp + 3, dry + 4.8, { align: 'center' });
+            doc.setTextColor(d.dmg > 0 ? 220 : 150, d.dmg > 0 ? 53 : 150, d.dmg > 0 ? 69 : 150);
+            doc.text(d.dmg > 0 ? String(d.dmg) : '✓', dcols.dmg + 3, dry + 4.8, { align: 'center' });
+
+            // Mini barra proporcional
+            const barX = dcols.barra, barW3 = 26, barH3 = 3;
+            const bFill = (d.total / maxDocTotal) * barW3;
+            doc.setFillColor(235, 235, 235);
+            doc.roundedRect(barX, dry + 2, barW3, barH3, 0.5, 0.5, 'F');
+            doc.setFillColor(d.esNuevo ? 230 : 13, d.esNuevo ? 81 : 104, d.esNuevo ? 0 : 50);
+            doc.roundedRect(barX, dry + 2, bFill, barH3, 0.5, 0.5, 'F');
+
+            // Línea separadora
+            doc.setDrawColor(235, 235, 235); doc.setLineWidth(0.15);
+            doc.line(14, dry + DOCFILA_H, 196, dry + DOCFILA_H);
+
+            dry += DOCFILA_H;
+        });
+
+        // Leyenda naranja al pie de la última página de docentes
+        if (ci === docChunks.length - 1) {
+            doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+            doc.setFillColor(255, 237, 213);
+            doc.roundedRect(14, dry + 2, 100, 6, 1, 1, 'F');
+            doc.setTextColor(230, 81, 0);
+            doc.text('★ Docente nuevo: no registró préstamos en ' + (mesAnteriorNombre || 'mes anterior'), 16, dry + 6);
+        }
+    });
+
+    // El footer de estas páginas lo maneja el loop final
 
     // ─── PÁGINA: RESUMEN SEMANAL + ALERTAS ───────────────────────────────────
     doc.addPage();
