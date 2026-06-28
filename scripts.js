@@ -2849,7 +2849,7 @@ async function generatePDF() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("⚠ ALERTAS DEL MES", 17, alertasY + 6.5);
+    doc.text("⚠ ALERTA DE DEVOLUCIÓN", 17, alertasY + 6.5);
     doc.setFontSize(8);
     doc.text(`${alertas.length} alerta${alertas.length !== 1 ? 's' : ''}`, 192, alertasY + 6.5, { align: 'right' });
 
