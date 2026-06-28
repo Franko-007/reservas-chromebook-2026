@@ -1656,7 +1656,7 @@ async function generatePDF() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("COLEGIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
+    doc.text("LICEO BICENTENARIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
 
     // Línea separadora blanca
     doc.setDrawColor(255, 255, 255);
