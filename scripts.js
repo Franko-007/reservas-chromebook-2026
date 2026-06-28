@@ -1827,7 +1827,7 @@ async function generatePDF() {
     doc.addPage();
 
     // Header
-    doc.setFillColor(13, 104, 50);
+    doc.setFillColor(0, 51, 102);
     doc.rect(0, 0, 210, 22, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
@@ -2062,9 +2062,9 @@ async function generatePDF() {
 
     chunks.forEach((chunk, chunkIdx) => {
         if (!chunk.isFirst) {
-            // Nueva página con header verde de continuación
+            // Nueva página con header azul de continuación
             doc.addPage();
-            doc.setFillColor(13, 104, 50);
+            doc.setFillColor(0, 51, 102);
             doc.rect(0, 0, 210, HEADER_DOC_H, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(12);
@@ -2337,11 +2337,13 @@ async function generatePDF() {
 
     const maxDocTotal = docsTabla.length > 0 ? docsTabla[0].total : 1;
 
-    // Paginación: caben ~28 filas por página (7px cada una)
-    const DOCFILA_H    = 7;
-    const DOCHDR_H     = 22; // header verde de continuación
-    const DOCFOOT_SAFE = 278;
-    const DOCCONTENT_FIRST = 100; // en la primera página empieza más abajo (debajo de los KPIs)
+    // Paginación con valores reales:
+    // - grfY=27, grfH=52 → kpiY2=84 → tabla empieza en kpiY2+24 = 108
+    // - Footer en Y=283 (dejamos 5mm extra de margen sobre el footer del PDF)
+    const DOCFILA_H      = 7;
+    const DOCHDR_H       = 22;
+    const DOCFOOT_SAFE   = 272; // conservador: 15mm antes del borde inferior
+    const DOCCONTENT_FIRST = 108; // Y real donde empieza la tabla en la primera página
     const DOCCONTENT_CONT  = DOCHDR_H + 14;
     const MAX_ROWS_DOC_FIRST = Math.floor((DOCFOOT_SAFE - DOCCONTENT_FIRST) / DOCFILA_H);
     const MAX_ROWS_DOC_CONT  = Math.floor((DOCFOOT_SAFE - DOCCONTENT_CONT) / DOCFILA_H);
@@ -2384,8 +2386,6 @@ async function generatePDF() {
         if (!chunk.isFirst) {
             doc.addPage();
             doc.setFillColor(0, 51, 102);
-            doc.rect(0, 0, DOCHDR_H, 210, 'F'); // NO — rect horizontal
-            doc.setFillColor(0, 51, 102);
             doc.rect(0, 0, 210, DOCHDR_H, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(12); doc.setFont("helvetica", "bold");
@@ -2399,15 +2399,17 @@ async function generatePDF() {
         let   dry     = startY + 8;
 
         chunk.rows.forEach((d, i) => {
-            // Fondo: naranja suave para docentes nuevos, alternado para el resto
+            // Guard: nunca dibujar más allá del footer seguro
+            if (dry + DOCFILA_H > DOCFOOT_SAFE) return;
             if (d.esNuevo) {
-                doc.setFillColor(255, 237, 213); // naranja muy suave
+                doc.setFillColor(255, 237, 213);
             } else if (i % 2 === 0) {
                 doc.setFillColor(248, 249, 250);
             } else {
                 doc.setFillColor(255, 255, 255);
             }
-            doc.rect(14, dry, 182, DOCFILA_H, 'F');
+            // Rect desde x=17 (no desde 14) para no quedar pegado al borde de página
+            doc.rect(17, dry, 179, DOCFILA_H, 'F');
 
             // Número de orden global
             const nGlobal = (ci === 0 ? 0 : MAX_ROWS_DOC_FIRST + (ci - 1) * MAX_ROWS_DOC_CONT) + i + 1;
@@ -2415,11 +2417,9 @@ async function generatePDF() {
             doc.setTextColor(150, 150, 150);
             doc.text(String(nGlobal), dcols.n + 1, dry + 4.5);
 
-            // Nombre — naranja si es nuevo
+            // Nombre — texto naranja con ★ si es nuevo, sin rectángulo de fondo
             if (d.esNuevo) {
-                doc.setFillColor(230, 81, 0);
-                doc.roundedRect(dcols.nombre, dry + 1, 64, 5, 0.8, 0.8, 'F');
-                doc.setTextColor(255, 255, 255);
+                doc.setTextColor(230, 81, 0);
                 doc.setFont("helvetica", "bold");
                 doc.text('★ ' + d.nombre, dcols.nombre + 1, dry + 4.8);
             } else {
@@ -2484,10 +2484,321 @@ async function generatePDF() {
 
     // El footer de estas páginas lo maneja el loop final
 
+    // El footer de estas páginas lo maneja el loop final
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PÁGINA: OBSERVACIONES DEL MES
+    // ══════════════════════════════════════════════════════════════════════════
+    const _obsAct = _rowsMesAct.filter(d => {
+        const o = (d.observacion || '').trim().toLowerCase();
+        return o && !['sin novedad', 'ok', 'sin novedades', ''].includes(o);
+    }).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    doc.addPage();
+
+    // Header naranja
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text(`OBSERVACIONES DEL MES — ${mesActual.toUpperCase()} ${anioActual}`, 14, 13);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${_obsAct.length} registro${_obsAct.length !== 1 ? 's' : ''} con observación · Generado: ${new Date().toLocaleDateString('es-CL')}`, 14, 20);
+
+    if (_obsAct.length === 0) {
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(150, 150, 150);
+        doc.text('Sin observaciones registradas este mes.', 105, 120, { align: 'center' });
+    } else {
+        // Columnas rediseñadas con más espacio para fecha y observación
+        const obsColY = 27;
+        doc.setFillColor(0, 51, 102);
+        doc.rect(14, obsColY, 182, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.5);
+        doc.setFont("helvetica", "bold");
+        // Columnas: FECHA(17-36) DOCENTE(38-94) CURSO(96-118) ASIGNATURA(120-150) ESTADO(152-172) OBS(174-196)
+        const obsCols = { fecha: 17, prof: 38, curso: 96, asig: 120, estado: 152, obs: 174 };
+        doc.text('FECHA',       obsCols.fecha  + 1, obsColY + 5.5);
+        doc.text('DOCENTE',     obsCols.prof   + 1, obsColY + 5.5);
+        doc.text('CURSO',       obsCols.curso  + 1, obsColY + 5.5);
+        doc.text('ASIGNATURA',  obsCols.asig   + 1, obsColY + 5.5);
+        doc.text('ESTADO',      obsCols.estado + 1, obsColY + 5.5);
+        doc.text('OBSERVACIÓN', obsCols.obs    + 1, obsColY + 5.5);
+
+        let ory = obsColY + 8;
+        const OBS_ROW_H  = 8;
+        const OBS_FOOTER = 278;
+        const OBS_HDR_H  = 22;
+
+        _obsAct.forEach((d, i) => {
+            if (ory + OBS_ROW_H > OBS_FOOTER) {
+                doc.addPage();
+                doc.setFillColor(0, 51, 102);
+                doc.rect(0, 0, 210, OBS_HDR_H, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12); doc.setFont("helvetica", "bold");
+                doc.text(`OBSERVACIONES — ${mesActual.toUpperCase()} ${anioActual} (cont.)`, 14, 14);
+                doc.setFontSize(8); doc.setFont("helvetica", "normal");
+                doc.text(`Página continuación`, 14, 20);
+
+                doc.setFillColor(0, 51, 102);
+                doc.rect(14, OBS_HDR_H + 2, 182, 8, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+                doc.text('FECHA',       obsCols.fecha  + 1, OBS_HDR_H + 7.5);
+                doc.text('DOCENTE',     obsCols.prof   + 1, OBS_HDR_H + 7.5);
+                doc.text('CURSO',       obsCols.curso  + 1, OBS_HDR_H + 7.5);
+                doc.text('ASIGNATURA',  obsCols.asig   + 1, OBS_HDR_H + 7.5);
+                doc.text('ESTADO',      obsCols.estado + 1, OBS_HDR_H + 7.5);
+                doc.text('OBSERVACIÓN', obsCols.obs    + 1, OBS_HDR_H + 7.5);
+                ory = OBS_HDR_H + 10;
+            }
+
+            const esDmg = isDamagedRecord(d);
+            if (esDmg) {
+                doc.setFillColor(255, 245, 245);
+            } else if (i % 2 === 0) {
+                doc.setFillColor(240, 245, 255);
+            } else {
+                doc.setFillColor(255, 255, 255);
+            }
+            doc.rect(14, ory, 182, OBS_ROW_H, 'F');
+
+            const partes  = (d.fecha || '').split('-');
+            const fechaStr = partes.length === 3 ? `${partes[2]}/${partes[1]}` : d.fecha;
+            const obsText  = (d.observacion || '').trim();
+            const estado   = isDamagedRecord(d) ? 'DAÑO'
+                : d.uso_laboratorio === true || d.uso_laboratorio === 'TRUE' || d.uso_laboratorio === 'true' ? 'LABORATORIO'
+                : (d.estado_operativo || '').toUpperCase() || '—';
+
+            // Fecha completa visible, sin borde que la tape
+            doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+            doc.setTextColor(esDmg ? 198 : 60, esDmg ? 40 : 60, esDmg ? 40 : 60);
+            doc.text(fechaStr, obsCols.fecha + 2, ory + 5.2);
+
+            // Docente (max 28 chars en col 56px)
+            doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40);
+            const profTxt = (d.profesor || '—').length > 28 ? (d.profesor || '').slice(0, 28) + '.' : (d.profesor || '—');
+            doc.text(profTxt, obsCols.prof + 1, ory + 5.2);
+
+            // Curso (max 10 chars)
+            const cursoTxt = (d.curso || '—').slice(0, 10);
+            doc.text(cursoTxt, obsCols.curso + 1, ory + 5.2);
+
+            // Asignatura (max 16 chars)
+            const asigTxt = (d.asignatura || '—').length > 16 ? (d.asignatura || '').slice(0, 16) + '.' : (d.asignatura || '—');
+            doc.text(asigTxt, obsCols.asig + 1, ory + 5.2);
+
+            // Estado con color
+            const estColor = esDmg ? [198,40,40]
+                : estado === 'LABORATORIO' ? [111,66,193]
+                : [13,104,50];
+            doc.setFont("helvetica", "bold"); doc.setTextColor(...estColor);
+            doc.text(estado, obsCols.estado + 1, ory + 5.2);
+
+            // Observación (max 18 chars col estrecha)
+            doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+            const obsTxt = obsText.length > 18 ? obsText.slice(0, 18) + '…' : obsText;
+            doc.text(obsTxt, obsCols.obs + 1, ory + 5.2);
+
+            doc.setDrawColor(220, 228, 245); doc.setLineWidth(0.15);
+            doc.line(14, ory + OBS_ROW_H, 196, ory + OBS_ROW_H);
+            ory += OBS_ROW_H;
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PÁGINA: CONSOLIDADO DAÑOS Y OBSERVACIONES (mes actual vs mes anterior)
+    // ══════════════════════════════════════════════════════════════════════════
+    const _obsAnt = _rowsMesAnt.filter(d => {
+        const o = (d.observacion || '').trim().toLowerCase();
+        return o && !['sin novedad', 'ok', 'sin novedades', ''].includes(o);
+    });
+    const _dmgAct = _rowsMesAct.filter(d => isDamagedRecord(d));
+    const _dmgAnt = _rowsMesAnt.filter(d => isDamagedRecord(d));
+
+    // Tipos de daño del mes actual agrupados
+    const _tiposDmg = {};
+    _dmgAct.forEach(d => {
+        const tipo = (d.tipo_danio || d.observacion || 'Sin especificar').trim();
+        _tiposDmg[tipo] = (_tiposDmg[tipo] || 0) + 1;
+    });
+
+    doc.addPage();
+
+    // Header rojo
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    const titDmg = mesAnteriorNombre
+        ? `DAÑOS Y OBSERVACIONES: ${mesActual.toUpperCase()} vs ${mesAnteriorNombre.toUpperCase()}`
+        : `DAÑOS Y OBSERVACIONES: ${mesActual.toUpperCase()} ${anioActual}`;
+    doc.text(titDmg, 14, 13);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${anioActual} · Responsable: Franco San Martín`, 14, 20);
+
+    // ── Bloque superior: comparativa de KPIs daños y obs ─────────────────────
+    const dmgKpis = [
+        { label: 'Daños mes actual',     val: _dmgAct.length,  ant: _dmgAnt.length,  bg: [255,245,245], bc: [239,154,154], tc: [198,40,40] },
+        { label: 'Obs. mes actual',       val: _obsAct.length,  ant: _obsAnt.length,  bg: [255,248,235], bc: [255,183,77],  tc: [188,100,0] },
+        { label: 'Daños acumulado año',   val: db.filter(d => { const dt = new Date(d.fecha+"T00:00:00"); return !isNaN(dt) && dt.getFullYear()===anioActual && isDamagedRecord(d); }).length, ant: null, bg: [255,235,238], bc: [239,154,154], tc: [198,40,40] },
+        { label: 'Obs. acumulado año',    val: db.filter(d => { const dt = new Date(d.fecha+"T00:00:00"); const o=(d.observacion||'').trim().toLowerCase(); return !isNaN(dt) && dt.getFullYear()===anioActual && o && !['sin novedad','ok','sin novedades',''].includes(o); }).length, ant: null, bg: [255,248,225], bc: [255,183,77], tc: [188,100,0] },
+    ];
+
+    const dkW = (182 - 15) / 4;
+    dmgKpis.forEach((k, i) => {
+        const kx = 14 + i * (dkW + 5);
+        doc.setFillColor(...k.bg);
+        doc.roundedRect(kx, 27, dkW, 22, 2, 2, 'F');
+        doc.setDrawColor(...k.bc); doc.setLineWidth(0.4);
+        doc.roundedRect(kx, 27, dkW, 22, 2, 2, 'S');
+        doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(...k.tc);
+        doc.text(k.label.toUpperCase(), kx + dkW / 2, 33, { align: 'center' });
+        doc.setFontSize(13);
+        doc.text(String(k.val), kx + dkW / 2, 42, { align: 'center' });
+        if (k.ant !== null && mesAnteriorNombre) {
+            const dlt = k.val - k.ant;
+            doc.setFontSize(5.5); doc.setFont("helvetica", "normal");
+            const dltC = dlt > 0 ? [220,53,69] : dlt < 0 ? [25,135,84] : [150,150,150];
+            doc.setTextColor(...dltC);
+            doc.text((dlt > 0 ? '▲+' : dlt < 0 ? '▼' : '=') + Math.abs(dlt) + ` vs ${mesAnteriorNombre.slice(0,3)}`, kx + dkW / 2, 47, { align: 'center' });
+        }
+    });
+
+    // ── Tabla daños del mes actual ────────────────────────────────────────────
+    const dmgTblY = 54;
+    doc.setFillColor(198, 40, 40);
+    doc.rect(14, dmgTblY, 182, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+    doc.text(`DETALLE DE DAÑOS — ${mesActual.toUpperCase()} (${_dmgAct.length} registro${_dmgAct.length !== 1 ? 's' : ''})`, 16, dmgTblY + 5);
+
+    if (_dmgAct.length === 0) {
+        doc.setFillColor(240, 255, 244);
+        doc.rect(14, dmgTblY + 7, 182, 10, 'F');
+        doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(25, 135, 84);
+        doc.text('✓ Sin equipos dañados este mes', 105, dmgTblY + 13.5, { align: 'center' });
+    } else {
+        // Sub-header
+        doc.setFillColor(248, 235, 235);
+        doc.rect(14, dmgTblY + 7, 182, 7, 'F');
+        doc.setFontSize(5.2); doc.setFont("helvetica", "bold"); doc.setTextColor(100, 40, 40);
+        const dmgCols = { fecha: 14, prof: 30, curso: 78, chr: 104, ree: 116, dev: 128, tipo: 142 };
+        doc.text('FECHA',    dmgCols.fecha + 1, dmgTblY + 12);
+        doc.text('DOCENTE',  dmgCols.prof  + 1, dmgTblY + 12);
+        doc.text('CURSO',    dmgCols.curso + 1, dmgTblY + 12);
+        doc.text('CB',       dmgCols.chr   + 1, dmgTblY + 12);
+        doc.text('REEMP',    dmgCols.ree   + 1, dmgTblY + 12);
+        doc.text('DEV',      dmgCols.dev   + 1, dmgTblY + 12);
+        doc.text('TIPO / OBSERVACIÓN', dmgCols.tipo + 1, dmgTblY + 12);
+
+        let dry2 = dmgTblY + 14;
+        _dmgAct.forEach((d, i) => {
+            if (i % 2 === 0) { doc.setFillColor(255, 250, 250); doc.rect(14, dry2, 182, 7, 'F'); }
+
+            const partes = (d.fecha || '').split('-');
+            const fStr = partes.length === 3 ? `${partes[2]}/${partes[1]}` : d.fecha;
+            const profD = (d.profesor || '—').slice(0, 22);
+            const tipoD = (d.tipo_danio || d.observacion || '—').slice(0, 30);
+
+            doc.setFontSize(5.2); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 20, 20);
+            doc.text(fStr,   dmgCols.fecha + 1, dry2 + 4.8);
+            doc.text(profD,  dmgCols.prof  + 1, dry2 + 4.8);
+            doc.text(d.curso || '—', dmgCols.curso + 1, dry2 + 4.8);
+            doc.setTextColor(13, 104, 50);
+            doc.text(String(d.chromebooks || 0), dmgCols.chr  + 1, dry2 + 4.8);
+            doc.text(String(d.reemplazo   || 0), dmgCols.ree  + 1, dry2 + 4.8);
+            doc.text(String(d.devueltos   || 0), dmgCols.dev  + 1, dry2 + 4.8);
+            doc.setTextColor(198, 40, 40); doc.setFont("helvetica", "bold");
+            doc.text(tipoD, dmgCols.tipo + 1, dry2 + 4.8);
+
+            doc.setDrawColor(255, 220, 220); doc.setLineWidth(0.15);
+            doc.line(14, dry2 + 7, 196, dry2 + 7);
+            dry2 += 7;
+        });
+
+        // Tipos de daño agrupados
+        if (Object.keys(_tiposDmg).length > 0) {
+            dry2 += 3;
+            doc.setFontSize(5.5); doc.setFont("helvetica", "bold"); doc.setTextColor(100, 40, 40);
+            doc.text('Tipos de daño:', 16, dry2);
+            let tx = 50;
+            Object.entries(_tiposDmg).forEach(([tipo, cnt]) => {
+                doc.setFillColor(255, 235, 235);
+                doc.roundedRect(tx, dry2 - 4, Math.min(tipo.length * 2.8 + 14, 55), 6, 1, 1, 'F');
+                doc.setDrawColor(220, 53, 69); doc.setLineWidth(0.3);
+                doc.roundedRect(tx, dry2 - 4, Math.min(tipo.length * 2.8 + 14, 55), 6, 1, 1, 'S');
+                doc.setTextColor(198, 40, 40);
+                doc.text(`${tipo.slice(0,18)} (${cnt})`, tx + 2, dry2 + 0.8);
+                tx += Math.min(tipo.length * 2.8 + 18, 59);
+                if (tx > 180) { tx = 50; dry2 += 8; }
+            });
+            dry2 += 8;
+        }
+    }
+
+    // ── Comparativa daños/obs vs mes anterior ─────────────────────────────────
+    const cmpDmgY = _dmgAct.length === 0 ? dmgTblY + 22 :
+        dmgTblY + 14 + _dmgAct.length * 7 + (Object.keys(_tiposDmg).length > 0 ? 14 : 0) + 8;
+
+    if (cmpDmgY < 230 && mesAnteriorNombre) {
+        doc.setFillColor(40, 40, 80);
+        doc.rect(14, cmpDmgY, 182, 7, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+        doc.text(`COMPARATIVA VS ${mesAnteriorNombre.toUpperCase()}: DAÑOS Y OBSERVACIONES`, 16, cmpDmgY + 5);
+
+        // Tabla simple 2 columnas
+        const cmpRows = [
+            ['Registros con daño',       _dmgAct.length,  _dmgAnt.length],
+            ['Docentes con daño',         new Set(_dmgAct.map(d=>d.profesor).filter(Boolean)).size, new Set(_dmgAnt.map(d=>d.profesor).filter(Boolean)).size],
+            ['Registros con observación', _obsAct.length,  _obsAnt.length],
+            ['Docentes con obs.',          new Set(_obsAct.map(d=>d.profesor).filter(Boolean)).size, new Set(_obsAnt.map(d=>d.profesor).filter(Boolean)).size],
+        ];
+
+        // Header
+        doc.setFillColor(60, 60, 100);
+        doc.rect(14, cmpDmgY + 7, 182, 7, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(5.2); doc.setFont("helvetica", "bold");
+        doc.text('MÉTRICA',                     16, cmpDmgY + 12.5);
+        doc.text(mesAnteriorNombre.slice(0,3).toUpperCase(), 120, cmpDmgY + 12.5, { align: 'center' });
+        doc.text(mesActual.slice(0,3).toUpperCase(),         148, cmpDmgY + 12.5, { align: 'center' });
+        doc.text('VAR.',                        174, cmpDmgY + 12.5, { align: 'center' });
+
+        let cry = cmpDmgY + 14;
+        cmpRows.forEach((row, i) => {
+            if (i % 2 === 0) { doc.setFillColor(248, 248, 255); doc.rect(14, cry, 182, 7, 'F'); }
+            const delta = row[2] - row[1];
+            const dColor = delta > 0 ? [220,53,69] : delta < 0 ? [25,135,84] : [150,150,150];
+            const dStr   = delta === 0 ? '=' : (delta > 0 ? '▲+' : '▼') + Math.abs(delta);
+
+            doc.setFontSize(5.2); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+            doc.text(row[0],           16, cry + 4.8);
+            doc.setTextColor(100, 100, 100);
+            doc.text(String(row[1]),   120, cry + 4.8, { align: 'center' });
+            doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "bold");
+            doc.text(String(row[2]),   148, cry + 4.8, { align: 'center' });
+            doc.setTextColor(...dColor);
+            doc.text(dStr,             174, cry + 4.8, { align: 'center' });
+
+            doc.setDrawColor(220, 220, 240); doc.setLineWidth(0.15);
+            doc.line(14, cry + 7, 196, cry + 7);
+            cry += 7;
+        });
+    }
+
     // ─── PÁGINA: RESUMEN SEMANAL + ALERTAS ───────────────────────────────────
     doc.addPage();
 
-    doc.setFillColor(13, 104, 50);
+    doc.setFillColor(0, 51, 102);
     doc.rect(0, 0, 210, 22, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
