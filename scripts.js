@@ -1035,18 +1035,26 @@ function _hasDraftData() {
     return vals.some(v => v && v.trim() !== '');
 }
 
+// Bandera global: cuando el código guarda exitosamente, desactiva el guard
+// para que el .hide() programático no sea interceptado
+let _modalGuardBypass = false;
+
 function _setupModalCloseGuard() {
     const modalEl = document.getElementById('resModal');
     if (!modalEl) return;
-    // Evitar registrar el listener más de una vez
     if (modalEl._closeGuardRegistered) return;
     modalEl._closeGuardRegistered = true;
 
     modalEl.addEventListener('hide.bs.modal', function(e) {
+        // Si el cierre viene del código (guardar/cancelar confirmado), dejarlo pasar
+        if (_modalGuardBypass) {
+            _modalGuardBypass = false;
+            return;
+        }
         const fId = document.getElementById('fId');
         const esNuevo = !fId || fId.value === '';
         if (esNuevo && _hasDraftData()) {
-            e.preventDefault(); // detener cierre automático
+            e.preventDefault();
             Swal.fire({
                 title: '¿Descartar borrador?',
                 text: 'Hay datos ingresados que se perderán si cierras el formulario.',
@@ -1059,7 +1067,7 @@ function _setupModalCloseGuard() {
             }).then(result => {
                 if (result.isConfirmed) {
                     sessionStorage.removeItem('franco_draft');
-                    modalEl._closeGuardRegistered = false; // resetear para permitir cierre
+                    _modalGuardBypass = true;
                     bootstrap.Modal.getInstance(modalEl).hide();
                 }
             });
@@ -1255,6 +1263,7 @@ async function saveData() {
             sessionStorage.removeItem('franco_draft');
             sessionStorage.removeItem(CACHE_KEY);
             sessionStorage.removeItem(CACHE_TS);
+            _modalGuardBypass = true;
             bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
 
             Swal.fire({
@@ -1656,7 +1665,7 @@ async function generatePDF() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("LICEO BICENTENARIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
+    doc.text("COLEGIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
 
     // Línea separadora blanca
     doc.setDrawColor(255, 255, 255);
@@ -2849,7 +2858,7 @@ async function generatePDF() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("⚠ DEVOLUCIONES PENDIENTES", 17, alertasY + 6.5);
+    doc.text("⚠ ALERTA DE DEVOLUCIÓN", 17, alertasY + 6.5);
     doc.setFontSize(8);
     doc.text(`${alertas.length} alerta${alertas.length !== 1 ? 's' : ''}`, 192, alertasY + 6.5, { align: 'right' });
 
