@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN DE SUPABASE ====================
 const SUPABASE_URL = "https://nhvrzmezonadnxqalgui.supabase.co";
-const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tL_YS0Od"; // Reemplaza con tu clave de Supabase si es necesario
+const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tL_YS0Od"; // Reemplaza con tu clave anon / public
 
 const HEADERS = {
   "apikey": SUPABASE_KEY,
@@ -9,7 +9,7 @@ const HEADERS = {
   "Prefer": "return=representation"
 };
 
-let STOCK_MAXIMO   = 110; // sobreescrito por config si está disponible
+let STOCK_MAXIMO   = 110; 
 let STOCK_REEMPLAZO = 4;
 let DOCENTES_NSG = ["ALEXIS CORTÉS", "ALLYSON RIOS", "ANA OGAZ", "ANDREA SALAZAR", "ANDREA DONOSO", "AVIGUEY GONZALEZ", "CAMILA CONTRERAS", "CAMILA GONZÁLEZ", "CARLA MERA", "CARLOS ARAYA", "CARMEN ÁLVAREZ", "CAROLINA MIRANDA", "CAROLINA REYES", "CECILIA GARCÍA", "CLAUDIA TOLEDO", "CONSTANZA LÓPEZ", "DANIELA AMPUERO", "DANIELA CARRASCO", "DANIEL CIFUENTES", "DANIEL VITTA", "DANIELA VERA", "DANIELA VALENZUELA", "DEBORA GAETE", "DEBORA GONZÁLEZ", "ELIZABETH MIRANDA", "ERIKA KINDERMANN", "FERNANDA RÍOS", "FRANCISCA MAUREIRA", "FRANCISCA COFRÉ", "FRANCISCA VIZCAYA", "GIOVANNA ARIAS", "GOLDIE FARÍAS", "HERNÁN REYES", "JAVIERA ALIAGA", "JOAQUÍN ALMUNA", "KARIMME GUTIÉRREZ", "KARINA BARRIOS", "KAROLINA RIFFO", "LEONARDO RÍOS", "LORENA ARANCIBIA", "LUIS SÁNCHEZ", "MACARENA BELTRÁN", "MARÍA MONZÓN", "MARÍA GONZÁLEZ", "MARISOL GUAJARDO", "MATÍAS CUEVAS", "MATÍAS PEÑALOZA", "NATALIA CARTES", "NATALY HIDALGO", "NICOLE BELLO", "PAOLA ÁVILA", "PATRICIA NÚÑEZ", "PAULINA ARGOMEDO", "PRISCILA VALENZUELA", "REINA ORTEGA", "STEPHANY GUZMÁN", "VÍCTOR BARRIENTOS", "YADIA CERDA", "YARITZA LEÓN", "YESSENIA SÁNCHEZ"];
 
@@ -20,7 +20,6 @@ function _applyConfig(config) {
     if (Array.isArray(config.docentes) && config.docentes.length > 0) {
         DOCENTES_NSG = config.docentes.map(d => String(d).toUpperCase().trim()).filter(Boolean);
     }
-    console.log(`⚙️ Config cargada: stock=${STOCK_MAXIMO}, reemplazo=${STOCK_REEMPLAZO}, docentes=${DOCENTES_NSG.length}`);
 }
 
 let db = [];
@@ -35,7 +34,6 @@ let _wizardStep = 1;
 const WIZARD_TOTAL = 3;
 const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-// ==================== FUNCIONES AUXILIARES ====================
 function isDamagedRecord(record) {
     const obs = (record.observacion || "").toLowerCase();
     const damagedKeywords = ["daño", "pantalla", "teclado", "no enciende", "rota", "rayada", "falla", "malo", "averiado", "roto", "golpe", "quemado", "rayado", "sin rótulo", "sin rotulo", "sucio", "sin tecla"];
@@ -44,7 +42,6 @@ function isDamagedRecord(record) {
     return hasDamageKeyword || hasDamageState;
 }
 
-// ==================== CALENDARIO ESCOLAR NSG 2026 ====================
 const SCHOOL_WEEKS = {
     "2026-4": {
         1: { start: 4,  end: 8,  label: "Semana 1" },
@@ -260,7 +257,6 @@ function debouncedRender() {
     debounceTimer = setTimeout(renderAll, 300);
 }
 
-// ==================== CACHÉ DE SESIÓN ====================
 const CACHE_KEY   = 'cb_nsg_cache';
 const CACHE_TS    = 'cb_nsg_cache_ts';
 const CACHE_TTL   = 5 * 60 * 1000; 
@@ -312,8 +308,6 @@ function _applyData(records, skipWeekDetect) {
     renderAll();
 }
 
-// ==================== OPERACIONES CON SUPABASE ====================
-
 async function load() {
     const loadingEl = document.getElementById('loading');
     if (loadingEl) loadingEl.style.display = 'flex';
@@ -353,18 +347,6 @@ async function load() {
             _saveSessionCache(data);
             _hideOfflineBanner();
             updateSyncChip('fresh', 0);
-            console.log('✅ Datos cargados desde Supabase:', data.length, 'registros');
-            
-            Swal.fire({
-                icon: 'success',
-                title: 'Datos sincronizados',
-                text: `Se cargaron ${data.length} registros correctamente`,
-                timer: 2000,
-                showConfirmButton: false,
-                toast: true,
-                position: 'top-end'
-            });
-
             _applyData(data, false);
         } else {
             throw new Error('Error al cargar datos desde Supabase');
@@ -654,8 +636,6 @@ async function inlineEdit(id, trEl) {
         Swal.fire('Error', 'No se pudo guardar: ' + e.message, 'error');
     }
 }
-
-// ==================== RENDERIZADO Y UI ====================
 
 function getEstado(d) {
     const totalOut = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
@@ -1198,7 +1178,6 @@ function showPage(page) {
     }
 }
 
-// ==================== MODAL Y WIZARD ====================
 function toggleNroEquipo() {
     const ree = parseInt(document.getElementById('fRee').value || 0);
     const wrapper = document.getElementById('nroEquipoWrapper');
@@ -1358,3 +1337,529 @@ function wizardNext() {
         if (cvCurso) cvCurso.textContent = document.getElementById('fCurso').value || '—';
         if (cvAsig) cvAsig.textContent = document.getElementById('fAsignatura').value || '—';
         if (cvProf) cvProf.textContent = document.getElementById('fProfesor').value || '—';
+        if (cvLab) cvLab.textContent = labCheck ? '🟣 Sí' : 'No';
+        if (cvChr) cvChr.textContent = document.getElementById('fChr').value || '0';
+        if (cvRee) cvRee.textContent = document.getElementById('fRee').value || '0';
+        if (cvDev) cvDev.textContent = document.getElementById('fDev').value || '0';
+        if (cvNroeq) cvNroeq.textContent = nroEq;
+        if (cvEstado) cvEstado.textContent = estadoMap[estadoDev] || '—';
+    }
+    if (_wizardStep < WIZARD_TOTAL) wizardGoTo(_wizardStep + 1);
+}
+
+function wizardPrev() {
+    if (_wizardStep > 1) wizardGoTo(_wizardStep - 1);
+}
+
+function editItem(id) {
+    const r = db.find(x => x.id.toString() === id.toString());
+    if (!r) return;
+    
+    const fId = document.getElementById('fId');
+    const fFecha = document.getElementById('fFecha');
+    const fHora = document.getElementById('fHora');
+    const fCurso = document.getElementById('fCurso');
+    const fProfesor = document.getElementById('fProfesor');
+    const fAsignatura = document.getElementById('fAsignatura');
+    const fChr = document.getElementById('fChr');
+    const fRee = document.getElementById('fRee');
+    const fDev = document.getElementById('fDev');
+    const fObs = document.getElementById('fObs');
+    const fLab = document.getElementById('fLab');
+    
+    if (fId) fId.value = r.id;
+    if (fFecha) fFecha.value = r.fecha;
+    if (fHora) fHora.value = r.hora;
+    if (fCurso) fCurso.value = r.curso;
+    fillDocentes();
+    if (fProfesor) fProfesor.value = r.profesor;
+    if (fAsignatura) fAsignatura.value = r.asignatura;
+    if (fChr) fChr.value = r.chromebooks;
+    if (fRee) fRee.value = r.reemplazo;
+    if (fDev) fDev.value = r.devueltos;
+    if (fObs) fObs.value = r.observacion;
+    
+    const labVal = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
+    if (fLab) fLab.checked = labVal;
+    
+    const nroEquipoWrapper = document.getElementById('nroEquipoWrapper');
+    const ree = parseInt(r.reemplazo || 0);
+    if (nroEquipoWrapper) nroEquipoWrapper.style.display = ree > 0 ? 'block' : 'none';
+    document.querySelectorAll('input[name="fNroEquipo"]').forEach(rb => rb.checked = false);
+    if (r.nro_equipo_reemplazo) {
+        const rbEq = document.querySelector(`input[name="fNroEquipo"][value="${r.nro_equipo_reemplazo}"]`);
+        if (rbEq) rbEq.checked = true;
+    }
+    
+    const obs = (r.observacion || "").toLowerCase();
+    const tipoDanioWrapper = document.getElementById('tipoDanioWrapper');
+    document.querySelectorAll('input[name="fEstadoDev"]').forEach(rb => rb.checked = false);
+    
+    const isDamaged = isDamagedRecord(r);
+    
+    if (isDamaged) {
+        const edDanio = document.getElementById('edDanio');
+        if (edDanio) edDanio.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'block';
+        const fTipoDanio = document.getElementById('fTipoDanio');
+        if (fTipoDanio) fTipoDanio.value = r.observacion;
+    } else if (obs === 'sin novedad' || obs === '' || obs === 'ok') {
+        const edOk = document.getElementById('edOk');
+        if (edOk) edOk.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    } else if (obs === 'pendiente') {
+        const edPend = document.getElementById('edPendiente');
+        if (edPend) edPend.checked = true;
+        if (tipoDanioWrapper) tipoDanioWrapper.style.display = 'none';
+    }
+    
+    validateCounts();
+    wizardGoTo(2);
+    new bootstrap.Modal(document.getElementById('resModal')).show();
+}
+
+function saveDraft() {
+    if (document.getElementById('fId').value !== "") return;
+    const estadoDev = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
+    const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
+    const draft = {
+        fecha: document.getElementById('fFecha')?.value || '',
+        hora: document.getElementById('fHora')?.value || '',
+        curso: document.getElementById('fCurso')?.value || '',
+        profesor: document.getElementById('fProfesor')?.value || '',
+        asignatura: document.getElementById('fAsignatura')?.value || '',
+        obs: document.getElementById('fObs')?.value || '',
+        lab: document.getElementById('fLab')?.checked || false,
+        nroEquipo: nroEquipo,
+        estadoDev: estadoDev,
+        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
+    };
+    sessionStorage.setItem('franco_draft', JSON.stringify(draft));
+}
+
+function loadDraft() {
+    const saved = sessionStorage.getItem('franco_draft');
+    if (!saved) return;
+    const d = JSON.parse(saved);
+    const fFecha = document.getElementById('fFecha');
+    const fHora = document.getElementById('fHora');
+    const fCurso = document.getElementById('fCurso');
+    const fProfesor = document.getElementById('fProfesor');
+    const fAsignatura = document.getElementById('fAsignatura');
+    const fObs = document.getElementById('fObs');
+    const fLab = document.getElementById('fLab');
+    
+    if (fFecha && d.fecha) fFecha.value = d.fecha;
+    if (fHora && d.hora) fHora.value = d.hora;
+    if (fCurso && d.curso) fCurso.value = d.curso;
+    if (fProfesor && d.profesor) fProfesor.value = d.profesor;
+    if (fAsignatura && d.asignatura) fAsignatura.value = d.asignatura;
+    if (fObs && d.obs) fObs.value = d.obs;
+    if (fLab && d.lab !== undefined) fLab.checked = d.lab;
+    if (d.nroEquipo) {
+        const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
+        if (rb) rb.checked = true;
+        toggleNroEquipo();
+    }
+    if (d.estadoDev) {
+        const rb = document.querySelector(`input[name="fEstadoDev"][value="${d.estadoDev}"]`);
+        if (rb) {
+            rb.checked = true;
+            onEstadoDevChange();
+        }
+    }
+    if (d.tipoDanio && document.getElementById('fTipoDanio')) {
+        document.getElementById('fTipoDanio').value = d.tipoDanio;
+    }
+}
+
+async function generatePDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const mesActual = mNames[viewDate.getMonth()];
+    const anioActual = viewDate.getFullYear();
+    const fechaEmision = new Date().toLocaleDateString('es-CL');
+
+    const mesData = db.filter(d => {
+        const date = new Date(d.fecha + "T00:00:00");
+        return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
+    });
+
+    let logoBase64 = null;
+    try {
+        const resp = await fetch("https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png");
+        const blob = await resp.blob();
+        logoBase64 = await new Promise(res => {
+            const reader = new FileReader();
+            reader.onloadend = () => res(reader.result);
+            reader.readAsDataURL(blob);
+        });
+    } catch(e) { console.warn("Logo no disponible:", e); }
+
+    const total   = mesData.length;
+    const ok      = mesData.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
+    const dmg     = mesData.filter(d => isDamagedRecord(d)).length;
+    const activos = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
+    const labs    = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
+    const reemp   = mesData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
+    const tasa    = total > 0 ? Math.round((ok / total) * 100) : 0;
+
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, 297, 'F');
+    doc.setFillColor(0, 70, 130);
+    doc.rect(0, 180, 210, 117, 'F');
+    doc.setFillColor(13, 104, 50);
+    doc.rect(0, 155, 210, 6, 'F');
+
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 80, 28, 50, 63.3);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("COLEGIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
+
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.4);
+    doc.line(40, 109, 170, 109);
+
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("GESTIÓN CHROMEBOOKS", 105, 124, { align: 'center' });
+
+    doc.setFillColor(13, 104, 50);
+    doc.roundedRect(55, 130, 100, 16, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${mesActual.toUpperCase()} ${anioActual}`, 105, 141, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.text("RESUMEN EJECUTIVO", 105, 170, { align: 'center' });
+
+    const portadaKpis = [
+        { label: 'Préstamos', value: total },
+        { label: 'Devueltos OK', value: ok },
+        { label: 'Pendientes',  value: activos },
+        { label: 'Con Daños',   value: dmg }
+    ];
+    const pkW = 38, pkH = 22, pkY = 178, pkX0 = 14 + (182 - portadaKpis.length * pkW - 3 * 6) / 2;
+    portadaKpis.forEach((k, i) => {
+        const px = pkX0 + i * (pkW + 6);
+        doc.setFillColor(0, 80, 150);
+        doc.roundedRect(px, pkY, pkW, pkH, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(String(k.value), px + pkW / 2, pkY + 11, { align: 'center' });
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "normal");
+        doc.text(k.label.toUpperCase(), px + pkW / 2, pkY + 18, { align: 'center' });
+    });
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Tasa de retorno: ${tasa}%`, 105, 218, { align: 'center' });
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(200, 220, 255);
+    doc.text(`Emitido: ${fechaEmision}`, 105, 232, { align: 'center' });
+    doc.text(`Responsable: Franco San Martín — Técnico Informático`, 105, 239, { align: 'center' });
+    doc.text(`Área de Informática · NSG ${anioActual}`, 105, 246, { align: 'center' });
+
+    const HEADER_H = 38;
+    doc.addPage();
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 0, 210, HEADER_H, 'F');
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 181, 4, 22, 27.8);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(17);
+    doc.setFont("helvetica", "bold");
+    doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 14);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 23);
+    doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 31);
+
+    const docentesMap = {};
+    mesData.forEach(d => {
+        const k = d.profesor ? d.profesor.trim() : "—";
+        if (!docentesMap[k]) docentesMap[k] = { total: 0, ok: 0, reemp: 0, lab: 0, dmg: 0 };
+        docentesMap[k].total++;
+        if ((parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
+        if (parseInt(d.reemplazo || 0) > 0) docentesMap[k].reemp++;
+        if (d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
+        if (isDamagedRecord(d)) docentesMap[k].dmg++;
+    });
+
+    const todosDocentes = Object.entries(docentesMap).sort((a, b) => b[1].total - a[1].total);
+
+    doc.autoTable({
+        startY: 45,
+        head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
+        body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? v.reemp : '—', v.lab > 0 ? v.lab : '—', v.dmg > 0 ? v.dmg : '—']),
+        headStyles: { fillColor: [0, 51, 102], fontSize: 7, fontStyle: 'bold', textColor: 255 },
+        bodyStyles: { fontSize: 7 },
+        alternateRowStyles: { fillColor: [245, 248, 255] },
+        margin: { left: 14, right: 14 }
+    });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(128);
+        doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 290);
+        doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+    }
+
+    doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
+}
+
+function renderAlertasPanel(mesCompleto) {
+    const wrapper = document.getElementById('alertasPanelWrapper');
+    const body = document.getElementById('alertasBody');
+    const badge = document.getElementById('alertasCount');
+    if (!wrapper || !body) return;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const pendientes = mesCompleto.filter(d => {
+        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
+        const isDmg = isDamagedRecord(d);
+        return total > dev && !isDmg;
+    });
+
+    const danados = mesCompleto.filter(d => isDamagedRecord(d));
+    const totalAlertas = pendientes.length + danados.length;
+
+    if (totalAlertas === 0) {
+        wrapper.style.display = 'none';
+        return;
+    }
+
+    wrapper.style.display = 'block';
+    if (badge) badge.textContent = totalAlertas;
+
+    let html = '';
+
+    pendientes.forEach(d => {
+        const fechaD = new Date(d.fecha + "T00:00:00");
+        const diffMs = hoy - fechaD;
+        const dias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const total = parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0);
+        const dev = parseInt(d.devueltos || 0);
+        const falta = total - dev;
+        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
+
+        let diasClass = 'alerta-dias';
+        let diasLabel = dias === 0 ? 'HOY' : `${dias}d`;
+
+        html += `<div class="alerta-item" onclick="editItem('${d.id}')">
+            <div class="${diasClass}"><div>${diasLabel}</div></div>
+            <div class="alerta-info">
+                <div class="alerta-nombre">👤 ${d.profesor}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">${falta} equipo${falta !== 1 ? 's' : ''} sin devolver</b></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;">Editar</button>
+        </div>`;
+    });
+
+    danados.forEach(d => {
+        const fechaFmt = d.fecha.split('-').reverse().slice(0, 2).join('/');
+        html += `<div class="alerta-item" onclick="editItem('${d.id}')" style="border-left: 3px solid #dc3545;">
+            <div class="alerta-dias" style="background:#dc3545;"><div>⚠️</div></div>
+            <div class="alerta-info">
+                <div class="alerta-nombre">👤 ${d.profesor}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">🔴 ${d.observacion || 'Daño reportado'}</b></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold">Editar</button>
+        </div>`;
+    });
+
+    body.innerHTML = html;
+}
+
+function renderObsPanel(registros) {
+    const body  = document.getElementById('obsBody');
+    const count = document.getElementById('obsCount');
+    if (!body) return;
+
+    if (count) count.textContent = registros.length;
+
+    if (registros.length === 0) {
+        body.innerHTML = '<div class="obs-empty">Sin observaciones este mes 📝</div>';
+        return;
+    }
+
+    const sorted = [...registros].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    body.innerHTML = sorted.map(d => {
+        const partes = (d.fecha || '').split('-');
+        const fechaStr = partes.length === 3 ? `${partes[2]}/${partes[1]}` : d.fecha;
+        const obs = (d.observacion || '').trim();
+        return `
+        <div class="obs-item" onclick="editItem('${d.id}')" title="Click para editar este registro">
+            <div class="obs-fecha-badge">${fechaStr}</div>
+            <div class="obs-info">
+                <div class="obs-profesor">👤 ${d.profesor || '—'}</div>
+                <div class="obs-curso">🏫 ${d.curso || '—'} · 📚 ${d.asignatura || '—'}</div>
+                <div class="obs-texto">💬 ${obs}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleObsPanel() {
+    const wrapper = document.getElementById('obsPanelWrapper');
+    if (!wrapper) return;
+    const visible = wrapper.style.display !== 'none';
+    wrapper.style.display = visible ? 'none' : 'block';
+}
+
+function _calcMesData(mes) {
+    const año = new Date().getFullYear();
+    const rows = db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === año && dt.getMonth() === mes;
+    });
+    const total   = rows.length;
+    const ok      = rows.filter(d => {
+        const t = parseInt(d.chromebooks||0) + parseInt(d.reemplazo||0);
+        return t === parseInt(d.devueltos||0) && t > 0;
+    }).length;
+    const dmg     = rows.filter(d => isDamagedRecord(d)).length;
+    const lab     = rows.filter(d => d.uso_laboratorio===true||d.uso_laboratorio==="TRUE"||d.uso_laboratorio==="true").length;
+    const reemp   = rows.filter(d => parseInt(d.reemplazo||0) > 0).length;
+    const conObs  = rows.filter(d => {
+        const o = (d.observacion||'').trim().toLowerCase();
+        return o && !['sin novedad','ok',''].includes(o);
+    }).length;
+    const docentes = new Set(rows.map(d => d.profesor).filter(Boolean)).size;
+    const tasa    = total > 0 ? Math.round((ok / total) * 100) : 0;
+    return { total, ok, dmg, lab, reemp, conObs, docentes, tasa, rows };
+}
+
+function renderResumenAnual() {
+    const año = new Date().getFullYear();
+    const mesesConDatos = mNames.map((nombre, i) => ({ nombre, i, ..._calcMesData(i) }))
+        .filter(m => m.total > 0);
+
+    if (mesesConDatos.length === 0) {
+        document.getElementById('tablaAnualBody').innerHTML =
+            '<tr><td colspan="10" class="text-muted text-center py-4">Sin datos registrados este año</td></tr>';
+        return;
+    }
+
+    let html = '';
+    mesesConDatos.forEach((m, idx) => {
+        const prev   = idx > 0 ? mesesConDatos[idx - 1] : null;
+        const delta  = prev ? m.total - prev.total : null;
+        const deltaHtml = delta === null ? '<span class="text-muted">—</span>'
+            : delta > 0  ? `<span class="text-success fw-bold">▲ +${delta}</span>`
+            : delta < 0  ? `<span class="text-danger fw-bold">▼ ${delta}</span>`
+            :               `<span class="text-muted">= 0</span>`;
+
+        const tasaColor = m.tasa >= 95 ? '#198754' : m.tasa >= 80 ? '#f39c12' : '#dc3545';
+        const tasaBadge = `<span class="badge fw-bold" style="background:${tasaColor};color:white;font-size:0.75rem;">${m.tasa}%</span>`;
+
+        html += `<tr style="cursor:pointer;" onclick="_irAMes(${m.i})" title="Ver ${m.nombre}">
+            <td class="fw-bold text-start ps-3">📅 ${m.nombre}</td>
+            <td><span class="fw-bold fs-6" style="color:#0d6832;">${m.total}</span></td>
+            <td>${deltaHtml}</td>
+            <td>${m.ok}</td>
+            <td>${tasaBadge}</td>
+            <td>${m.lab > 0 ? `<span class="badge" style="background:#6f42c1;color:white;">${m.lab}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.reemp > 0 ? `<span class="badge bg-warning text-dark">${m.reemp}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.dmg > 0 ? `<span class="badge bg-danger">${m.dmg}</span>` : '<span class="text-success">✓</span>'}</td>
+            <td>${m.conObs > 0 ? `<span class="badge" style="background:#d15502;color:white;">${m.conObs}</span>` : '<span class="text-muted">0</span>'}</td>
+            <td>${m.docentes}</td>
+        </tr>`;
+    });
+
+    document.getElementById('tablaAnualBody').innerHTML = html;
+}
+
+function _irAMes(mesIdx) {
+    viewDate = new Date(new Date().getFullYear(), mesIdx, 1);
+    currentWeek = 0;
+    filterMode  = 'all';
+    showPage('registros');
+    renderAll();
+    renderAnualChart();
+}
+
+function updateSyncChip(estado, mins) {
+    const chip  = document.getElementById('syncChip');
+    const label = chip?.querySelector('.sync-label');
+    if (!chip) return;
+
+    chip.className = 'sync-chip';
+    if (estado === 'fresh') {
+        chip.classList.add('sync-fresh');
+        if (label) label.textContent = mins <= 1 ? '🟢 Sincronizado (Supabase)' : `🟢 hace ${mins} min`;
+    } else if (estado === 'cache') {
+        chip.classList.add('sync-cache');
+        if (label) label.textContent = `🟡 Caché · hace ${mins} min`;
+    } else if (estado === 'offline') {
+        chip.classList.add('sync-offline');
+        if (label) label.textContent = '🔴 Sin conexión';
+    } else {
+        chip.classList.add('sync-loading');
+        if (label) label.textContent = 'Cargando...';
+    }
+}
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    const btn = document.getElementById('darkToggle');
+    if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+    sessionStorage.setItem('nsg_dark', isDark ? '1' : '0');
+}
+
+function _restoreDarkMode() {
+    if (sessionStorage.getItem('nsg_dark') === '1') {
+        document.body.classList.add('dark-mode');
+        const btn = document.getElementById('darkToggle');
+        if (btn) btn.textContent = '☀️';
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    const modalEl = document.getElementById('resModal');
+    const modalAbierto = modalEl && modalEl.classList.contains('show');
+
+    if (modalAbierto) {
+        if (e.key === 'Enter') {
+            const tag = document.activeElement?.tagName;
+            if (tag !== 'TEXTAREA' && tag !== 'BUTTON' && tag !== 'SELECT') {
+                if (_wizardStep < WIZARD_TOTAL) {
+                    e.preventDefault();
+                    wizardNext();
+                }
+            }
+        }
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        _hideOfflineBanner();
+    }
+});
+
+window.onload = () => {
+    _restoreDarkMode();
+    load();
+    setInterval(() => {
+        const chip = document.getElementById('syncChip');
+        if (!chip || chip.classList.contains('sync-offline') || chip.classList.contains('sync-loading')) return;
+        const ts = parseInt(sessionStorage.getItem(CACHE_TS) || '0');
+        if (!ts) return;
+        const mins = Math.round((Date.now() - ts) / 60000);
+        const esFresco = (Date.now() - ts) < CACHE_TTL;
+        updateSyncChip(esFresco ? 'fresh' : 'cache', mins);
+    }, 60000);
+};
