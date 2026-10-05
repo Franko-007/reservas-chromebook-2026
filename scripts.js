@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN DE SUPABASE ====================
 const SUPABASE_URL = "https://nhvrzmezonadnxqalgui.supabase.co";
-const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tl_YS..."; // Reemplaza con tu clave de Supabase si es necesario
+const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tL_YS0Od"; // Reemplaza con tu clave de Supabase si es necesario
 
 const HEADERS = {
   "apikey": SUPABASE_KEY,
