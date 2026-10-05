@@ -1,6 +1,6 @@
 // ==================== CONFIGURACIÓN ====================
 // IMPORTANTE: Reemplazar esta URL con la URL de tu Web App después de desplegar el código.gs
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxnuvtvWEyD-Yjc6DSXwFwqBQFK-SRj2z1ERez4JN4oXWej72y5yBx_ZoXPqbDBklg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx9oYUMvISAMXImYCUSdly6AHTMHYHjclurBwV7HYDV1PSr59STHP7gbkSNHRpYrQ/exec";
 
 let STOCK_MAXIMO   = 110; // sobreescrito por config del Sheets si está disponible
 let STOCK_REEMPLAZO = 4;
