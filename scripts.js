@@ -34,12 +34,92 @@ let _wizardStep = 1;
 const WIZARD_TOTAL = 3;
 const mNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+let _savingNow = false;
+
+// ==================== HELPERS DE DATOS ====================
+function _n(v) {
+    const x = parseInt(v, 10);
+    return isNaN(x) ? 0 : x;
+}
+
+// Escapa texto antes de insertarlo con innerHTML (evita XSS con datos de la BD)
+function _esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function _isLab(d) {
+    return d.uso_laboratorio === true || String(d.uso_laboratorio).toLowerCase() === 'true';
+}
+
+function _isOk(d) {
+    const total = _n(d.chromebooks) + _n(d.reemplazo);
+    return total > 0 && total === _n(d.devueltos);
+}
+
+// Pendiente de devolución y sin daño
+function _isDebt(d) {
+    return (_n(d.chromebooks) + _n(d.reemplazo)) > _n(d.devueltos) && !isDamagedRecord(d);
+}
+
+function _hasObs(d) {
+    const o = (d.observacion || '').trim().toLowerCase();
+    return o !== '' && !['sin novedad', 'ok'].includes(o);
+}
+
+// Fecha local (Chile) en formato YYYY-MM-DD. toISOString() usa UTC y después de las 21:00 daría el día siguiente.
+function _hoyISO() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function _normProf(d) {
+    return ((d && d.profesor) || '').trim().toUpperCase() || '—';
+}
+
+function _recordsOf(year, month) {
+    return db.filter(d => {
+        const dt = new Date(d.fecha + "T00:00:00");
+        return !isNaN(dt) && dt.getFullYear() === year && dt.getMonth() === month;
+    });
+}
+
+function _statsOf(rows) {
+    const porDoc = {};
+    rows.forEach(d => {
+        const k = _normProf(d);
+        const s = porDoc[k] || (porDoc[k] = { total: 0, ok: 0, reemp: 0, lab: 0, dmg: 0 });
+        s.total++;
+        if (_isOk(d)) s.ok++;
+        if (_n(d.reemplazo) > 0) s.reemp++;
+        if (_isLab(d)) s.lab++;
+        if (isDamagedRecord(d)) s.dmg++;
+    });
+    const total = rows.length;
+    const ok = rows.filter(_isOk).length;
+    const obs = rows.filter(_hasObs);
+    const dmgRows = rows.filter(isDamagedRecord);
+    return {
+        rows, total, ok, obs, dmgRows, porDoc,
+        dmg: dmgRows.length,
+        pend: rows.filter(_isDebt).length,
+        lab: rows.filter(_isLab).length,
+        reemp: rows.filter(d => _n(d.reemplazo) > 0).length,
+        tasa: total > 0 ? Math.round((ok / total) * 100) : 0,
+        docentes: Object.keys(porDoc).length,
+        docDmg: new Set(dmgRows.map(_normProf)).size,
+        docObs: new Set(obs.map(_normProf)).size
+    };
+}
+
+const _DAMAGE_RE = new RegExp('(^|[^a-záéíóúüñ])(' + [
+    "dañ", "daño", "pantalla", "teclado", "no enciende", "rota", "rayada", "falla", "malo", "averiado",
+    "roto", "golpe", "quemado", "rayado", "sin rótulo", "sin rotulo", "sucio", "sin tecla"
+].join('|') + ')');
+
 function isDamagedRecord(record) {
     const obs = (record.observacion || "").toLowerCase();
-    const damagedKeywords = ["daño", "pantalla", "teclado", "no enciende", "rota", "rayada", "falla", "malo", "averiado", "roto", "golpe", "quemado", "rayado", "sin rótulo", "sin rotulo", "sucio", "sin tecla"];
-    const hasDamageKeyword = damagedKeywords.some(keyword => obs.includes(keyword));
-    const hasDamageState = record.estado_dev === "danio";
-    return hasDamageKeyword || hasDamageState;
+    return _DAMAGE_RE.test(obs) || record.estado_dev === "danio";
 }
 
 const SCHOOL_WEEKS = {
@@ -321,7 +401,7 @@ async function load() {
         updateSyncChip('cache', mins || 1);
         
         fetch(`${SUPABASE_URL}/rest/v1/reservas?select=*&order=id.desc`, { headers: HEADERS })
-            .then(r => r.json())
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(data => {
                 if (Array.isArray(data)) {
                     _saveSessionCache(data);
@@ -385,6 +465,9 @@ async function saveData() {
     const loadingEl = document.getElementById('loading');
     if (loadingEl) loadingEl.style.display = 'flex';
 
+    if (_savingNow) return;
+    _savingNow = true;
+
     const esLab = document.getElementById('fLab').checked;
     const estadoDevSeleccionado = document.querySelector('input[name="fEstadoDev"]:checked')?.value || '';
     let obsValue = document.getElementById('fObs')?.value || '';
@@ -396,6 +479,7 @@ async function saveData() {
     } else if (estadoDevSeleccionado === 'danio') {
         const tipoDanio = (document.getElementById('fTipoDanio')?.value || '').trim();
         obsValue = tipoDanio || obsValue || 'Dañado';
+        if (!isDamagedRecord({ observacion: obsValue })) obsValue = `Dañado: ${obsValue}`;
     }
 
     const chr = parseInt(document.getElementById('fChr').value) || 0;
@@ -404,10 +488,10 @@ async function saveData() {
     
     let estado = 'ACTIVO';
     if (esLab) estado = 'LABORATORIO';
-    else if (obsValue.toLowerCase().includes('dañ')) estado = 'DAÑADO';
+    else if (isDamagedRecord({ observacion: obsValue })) estado = 'DAÑADO';
     else if ((chr + ree) === dev && dev > 0) estado = 'CERRADO';
     
-    const fechaCierre = estado === 'CERRADO' ? new Date().toISOString().slice(0, 10) : '';
+    const fechaCierre = estado === 'CERRADO' ? _hoyISO() : '';
     const nroEquipo = document.querySelector('input[name="fNroEquipo"]:checked')?.value || '';
 
     const idVal = document.getElementById('fId').value;
@@ -454,7 +538,7 @@ async function saveData() {
         sessionStorage.removeItem(CACHE_KEY);
         sessionStorage.removeItem(CACHE_TS);
         _modalGuardBypass = true;
-        bootstrap.Modal.getInstance(document.getElementById('resModal')).hide();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('resModal')).hide();
 
         Swal.fire({
             icon: 'success',
@@ -491,6 +575,7 @@ async function saveData() {
             confirmButtonText: 'Entendido'
         });
     } finally {
+        _savingNow = false;
         if (loadingEl) loadingEl.style.display = 'none';
     }
 }
@@ -548,15 +633,15 @@ async function inlineEdit(id, trEl) {
     const estadoActual = isDmg ? 'danio'
         : obs.toLowerCase() === 'pendiente' ? 'pendiente' : 'ok';
 
-    const { value: formValues, isDismissed } = await Swal.fire({
+    const { value: formValues, isDenied } = await Swal.fire({
         title: `✏️ Edición rápida`,
         html: `
             <div style="text-align:left;font-size:0.88rem;">
                 <div style="background:#f8f9fa;border-radius:8px;padding:10px 14px;margin-bottom:14px;line-height:1.7;">
-                    <b>👤</b> ${r.profesor} &nbsp;·&nbsp;
+                    <b>👤</b> ${_esc(r.profesor)} &nbsp;·&nbsp;
                     <b>📅</b> ${r.fecha.split('-').reverse().slice(0,2).join('/')} &nbsp;·&nbsp;
-                    <b>🏫</b> ${r.curso}<br>
-                    <b>📚</b> ${r.asignatura} &nbsp;·&nbsp;
+                    <b>🏫</b> ${_esc(r.curso)}<br>
+                    <b>📚</b> ${_esc(r.asignatura)} &nbsp;·&nbsp;
                     <b>💻</b> ${total} equipo${total !== 1 ? 's' : ''}
                 </div>
                 <label class="fw-bold small text-success d-block mb-1">✅ DEVUELTOS</label>
@@ -568,7 +653,7 @@ async function inlineEdit(id, trEl) {
                     <option value="danio"    ${estadoActual==='danio'    ? 'selected':''}>🔴 Con daño</option>
                 </select>
                 <label class="fw-bold small text-muted d-block mb-1">💬 OBSERVACIÓN</label>
-                <input id="il_obs" type="text" class="swal2-input" value="${obs}" placeholder="Observación..." style="margin:0;width:100%;">
+                <input id="il_obs" type="text" class="swal2-input" value="${_esc(obs)}" placeholder="Observación..." style="margin:0;width:100%;">
             </div>`,
         showCancelButton: true,
         showDenyButton: true,
@@ -578,32 +663,41 @@ async function inlineEdit(id, trEl) {
         confirmButtonColor: '#0d6832',
         denyButtonColor: '#003366',
         focusConfirm: false,
-        preConfirm: () => ({
-            dev:    parseInt(document.getElementById('il_dev').value)    || 0,
-            estado: document.getElementById('il_estado').value,
-            obs:    document.getElementById('il_obs').value.trim()
-        })
+        preConfirm: () => {
+            const devIn = parseInt(document.getElementById('il_dev').value) || 0;
+            if (devIn < 0 || devIn > total) {
+                Swal.showValidationMessage(`Devueltos debe estar entre 0 y ${total}`);
+                return false;
+            }
+            return {
+                dev:    devIn,
+                estado: document.getElementById('il_estado').value,
+                obs:    document.getElementById('il_obs').value.trim()
+            };
+        }
     });
 
-    if (isDismissed && Swal.getDenyButton?.()?.matches(':focus')) {
-        editItem(id); return;
-    }
+    if (isDenied) { editItem(id); return; }
     if (!formValues) return;
-    if (formValues === undefined) { editItem(id); return; }
 
     const devVal  = formValues.dev;
     const estadoV = formValues.estado;
-    const obsVal  = formValues.obs || (estadoV === 'ok' ? 'Sin novedad' : estadoV === 'pendiente' ? 'Pendiente' : obs);
+    let obsVal = formValues.obs;
+    // Si se elige "Sin novedad" pero el texto sigue describiendo un daño, se limpia
+    if (estadoV === 'ok' && isDamagedRecord({ observacion: obsVal })) obsVal = 'Sin novedad';
+    if (!obsVal) obsVal = estadoV === 'ok' ? 'Sin novedad' : estadoV === 'pendiente' ? 'Pendiente' : 'Dañado';
+    // El estado "Con daño" debe quedar reconocible como daño en la observación
+    if (estadoV === 'danio' && !isDamagedRecord({ observacion: obsVal })) obsVal = `Dañado: ${obsVal}`;
 
-    let estadoOp = 'ACTIVO';
-    if (estadoV === 'danio')    estadoOp = 'DAÑADO';
-    else if (estadoV === 'ok' && devVal === total && total > 0) estadoOp = 'CERRADO';
+    let estadoOp = _isLab(r) ? 'LABORATORIO' : 'ACTIVO';
+    if (estadoV === 'danio') estadoOp = 'DAÑADO';
+    else if (estadoV === 'ok' && devVal === total && total > 0 && !_isLab(r)) estadoOp = 'CERRADO';
 
     const payload = {
         devueltos:   devVal,
         observacion: obsVal,
         estado_operativo: estadoOp,
-        fecha_cierre: estadoOp === 'CERRADO' ? new Date().toISOString().slice(0,10) : (r.fecha_cierre || ''),
+        fecha_cierre: estadoOp === 'CERRADO' ? _hoyISO() : (r.fecha_cierre || ''),
         responsable_cierre: 'Franco San Martín'
     };
 
@@ -726,8 +820,8 @@ function renderAll() {
         const sorted = [...finalFiltered].sort((a, b) => {
             const fechaDiff = new Date(b.fecha) - new Date(a.fecha);
             if (fechaDiff !== 0) return fechaDiff;
-            const horaA = (a.hora || '00:00').trim();
-            const horaB = (b.hora || '00:00').trim();
+            const horaA = (a.hora || '00:00').trim().padStart(5, '0');
+            const horaB = (b.hora || '00:00').trim().padStart(5, '0');
             return horaA.localeCompare(horaB);
         });
         window._lastSortedData = sorted;
@@ -740,8 +834,8 @@ function renderAll() {
         const rows = [];
 
         sorted.forEach(r => {
-            const totalOut = parseInt(r.chromebooks) + parseInt(r.reemplazo);
-            const isOK = totalOut === parseInt(r.devueltos);
+            const totalOut = _n(r.chromebooks) + _n(r.reemplazo);
+            const isOK = totalOut === _n(r.devueltos);
             const isDamaged = isDamagedRecord(r);
             const isLab = r.uso_laboratorio === true || r.uso_laboratorio === "TRUE" || r.uso_laboratorio === "true";
 
@@ -771,7 +865,7 @@ function renderAll() {
             let estadoTextColor = isOK ? 'white' : '#fff';
 
             if (isDamaged) {
-                estadoTexto = r.observacion && r.observacion !== "Pendiente" ? r.observacion.substring(0, 20) : "CON DAÑO";
+                estadoTexto = r.observacion && r.observacion !== "Pendiente" ? _esc(r.observacion.substring(0, 20)) : "CON DAÑO";
                 estadoColor = 'var(--danger-red)';
                 estadoTextColor = 'white';
             }
@@ -781,14 +875,14 @@ function renderAll() {
 
             rows.push(`<tr class="${rowClass}" data-id="${r.id}" ondblclick="inlineEdit('${r.id}', this)" title="Doble clic para editar rápido">
                 <td><span class="text-muted" style="font-size:0.78rem;">${r.fecha.split('-').reverse().slice(0, 2).join('/')}</span></td>
-                <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${r.hora}</span></td>
-                <td>${r.curso}${r.curso === 'ELECTIVO' ? ' ' : (r.curso === 'Reemplazo' ? ' ' : '')}</td>
-                <td>${r.asignatura}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
-                <td class="text-start fw-bold" style="color:#333;">${r.profesor}</td>
-                <td>${r.chromebooks}</td>
-                <td class="text-danger fw-bold">${r.reemplazo}</td>
-                <td class="text-success fw-bold">${r.devueltos}</td>
-                <td>${badgeLab} ${(parseInt(r.reemplazo || 0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:#b71c1c;color:white;">📦 ${r.nro_equipo_reemplazo}</span>` : ''} ${badgeEstado}</td>
+                <td><span class="badge bg-light text-dark border" style="font-size:0.78rem;">🕐 ${_esc(r.hora)}</span></td>
+                <td>${_esc(r.curso)}</td>
+                <td>${_esc(r.asignatura)}${isLab ? ' <span style="color:#6f42c1;font-size:0.7rem;font-weight:700;">[LAB]</span>' : ''}</td>
+                <td class="text-start fw-bold" style="color:#333;">${_esc(r.profesor)}</td>
+                <td>${_n(r.chromebooks)}</td>
+                <td class="text-danger fw-bold">${_n(r.reemplazo)}</td>
+                <td class="text-success fw-bold">${_n(r.devueltos)}</td>
+                <td>${badgeLab} ${(parseInt(r.reemplazo || 0) > 0 && r.nro_equipo_reemplazo) ? `<span class="badge badge-status me-1" style="background:#b71c1c;color:white;">📦 ${_esc(r.nro_equipo_reemplazo)}</span>` : ''} ${badgeEstado}</td>
                 <td><div class="d-flex justify-content-center gap-1">
                     <button class="btn btn-sm btn-outline-primary border-0" onclick="editItem('${r.id}')" title="Editar">✏️</button>
                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem('${r.id}')" title="Eliminar">🗑️</button>
@@ -1043,9 +1137,9 @@ function updateCharts(base) {
         });
     }
 
-    const cerrados = base.filter(d => getEstado(d) === "ok").length;
-    const activos  = base.filter(d => getEstado(d) === "pendiente").length;
-    const danados  = base.filter(d => getEstado(d) === "dañado").length;
+    const danados  = base.filter(d => isDamagedRecord(d)).length;
+    const cerrados = base.filter(d => _isOk(d) && !isDamagedRecord(d)).length;
+    const activos  = base.filter(d => _isDebt(d)).length;
 
     const ctxStatus = document.getElementById('chartStatus');
     if (ctxStatus) {
@@ -1078,7 +1172,7 @@ function renderAnualChart() {
 
     db.forEach(d => {
         const dt = new Date(d.fecha + "T00:00:00");
-        if (!isNaN(dt) && dt.getFullYear() === 2026) {
+        if (!isNaN(dt) && dt.getFullYear() === viewDate.getFullYear()) {
             const m = dt.getMonth();
             usageTotal[m]++;
             if (parseInt(d.reemplazo || 0) > 0) replacements[m]++;
@@ -1113,6 +1207,7 @@ function renderAnualChart() {
 
 function moveMonth(n) {
     viewDate.setMonth(viewDate.getMonth() + n);
+    currentWeek = 0;
     renderAll();
 }
 
@@ -1245,7 +1340,7 @@ function openModal() {
     const fId = document.getElementById('fId');
     if (fId) fId.value = '';
     if (form) form.classList.remove('was-validated');
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = _hoyISO();
     const fFecha = document.getElementById('fFecha');
     if (fFecha) fFecha.value = hoyStr;
     const fLab = document.getElementById('fLab');
@@ -1261,8 +1356,7 @@ function openModal() {
     loadDraft();
     fillDocentes();
     wizardGoTo(1);
-    const modalInst = new bootstrap.Modal(document.getElementById('resModal'));
-    modalInst.show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('resModal')).show();
     _setupModalCloseGuard();
 }
 
@@ -1415,7 +1509,7 @@ function editItem(id) {
     
     validateCounts();
     wizardGoTo(2);
-    new bootstrap.Modal(document.getElementById('resModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('resModal')).show();
 }
 
 function saveDraft() {
@@ -1432,7 +1526,10 @@ function saveDraft() {
         lab: document.getElementById('fLab')?.checked || false,
         nroEquipo: nroEquipo,
         estadoDev: estadoDev,
-        tipoDanio: document.getElementById('fTipoDanio')?.value || ''
+        tipoDanio: document.getElementById('fTipoDanio')?.value || '',
+        chr: document.getElementById('fChr')?.value || '',
+        ree: document.getElementById('fRee')?.value || '',
+        dev: document.getElementById('fDev')?.value || ''
     };
     sessionStorage.setItem('franco_draft', JSON.stringify(draft));
 }
@@ -1456,6 +1553,10 @@ function loadDraft() {
     if (fAsignatura && d.asignatura) fAsignatura.value = d.asignatura;
     if (fObs && d.obs) fObs.value = d.obs;
     if (fLab && d.lab !== undefined) fLab.checked = d.lab;
+    [['fChr', d.chr], ['fRee', d.ree], ['fDev', d.dev]].forEach(([id, v]) => {
+        const el = document.getElementById(id);
+        if (el && v !== undefined && v !== '') el.value = v;
+    });
     if (d.nroEquipo) {
         const rb = document.querySelector(`input[name="fNroEquipo"][value="${d.nroEquipo}"]`);
         if (rb) rb.checked = true;
@@ -1473,148 +1574,801 @@ function loadDraft() {
     }
 }
 
-async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const mesActual = mNames[viewDate.getMonth()];
-    const anioActual = viewDate.getFullYear();
-    const fechaEmision = new Date().toLocaleDateString('es-CL');
+// ==================== INFORME PDF ====================
+const PDF_C = {
+    navy: [0, 51, 102], navy2: [0, 70, 130], navy3: [0, 80, 150],
+    green: [13, 104, 50], green2: [25, 135, 84],
+    amber: [243, 156, 18], red: [220, 53, 69], redDark: [211, 47, 47], purple: [111, 66, 193],
+    soft: [245, 248, 255], line: [222, 228, 240],
+    text: [51, 51, 51], muted: [120, 128, 140], bar: [120, 160, 205]
+};
+const PDF_LOGO_URL = "https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png";
+let _pdfLogoCache = null;
 
-    const mesData = db.filter(d => {
-        const date = new Date(d.fecha + "T00:00:00");
-        return !isNaN(date) && date.getMonth() === viewDate.getMonth() && date.getFullYear() === viewDate.getFullYear();
-    });
-
-    let logoBase64 = null;
+async function _pdfLoadLogo() {
+    if (_pdfLogoCache) return _pdfLogoCache;
     try {
-        const resp = await fetch("https://i.postimg.cc/sxxwfhwK/LOGO-LBSNG-06-237x300.png");
+        const resp = await fetch(PDF_LOGO_URL);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const blob = await resp.blob();
-        logoBase64 = await new Promise(res => {
+        _pdfLogoCache = await new Promise((res, rej) => {
             const reader = new FileReader();
             reader.onloadend = () => res(reader.result);
+            reader.onerror = rej;
             reader.readAsDataURL(blob);
         });
-    } catch(e) { console.warn("Logo no disponible:", e); }
+    } catch (e) { console.warn("Logo no disponible:", e); }
+    return _pdfLogoCache;
+}
 
-    const total   = mesData.length;
-    const ok      = mesData.filter(d => (parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0).length;
-    const dmg     = mesData.filter(d => isDamagedRecord(d)).length;
-    const activos = mesData.filter(d => (parseInt(d.chromebooks || 0) + parseInt(d.reemplazo || 0)) > parseInt(d.devueltos || 0) && !isDamagedRecord(d)).length;
-    const labs    = mesData.filter(d => d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true").length;
-    const reemp   = mesData.filter(d => parseInt(d.reemplazo || 0) > 0).length;
-    const tasa    = total > 0 ? Math.round((ok / total) * 100) : 0;
+function _fmtFechaCL(date) {
+    const p = n => String(n).padStart(2, '0');
+    return `${p(date.getDate())}-${p(date.getMonth() + 1)}-${date.getFullYear()}`;
+}
 
-    doc.setFillColor(0, 51, 102);
-    doc.rect(0, 0, 210, 297, 'F');
-    doc.setFillColor(0, 70, 130);
-    doc.rect(0, 180, 210, 117, 'F');
-    doc.setFillColor(13, 104, 50);
-    doc.rect(0, 155, 210, 6, 'F');
+// jsPDF (fuente helvetica) no soporta flechas Unicode: se usa +/- en texto
+function _sgn(n) { return n > 0 ? `+${n}` : (n < 0 ? `${n}` : '='); }
 
-    if (logoBase64) doc.addImage(logoBase64, 'PNG', 80, 28, 50, 63.3);
+function _aggRows(rows) {
+    const prest = rows.length;
+    const ok = rows.filter(_isOk).length;
+    return {
+        prest, ok,
+        chr: rows.reduce((s, d) => s + _n(d.chromebooks), 0),
+        ree: rows.reduce((s, d) => s + _n(d.reemplazo), 0),
+        tasa: prest > 0 ? Math.round((ok / prest) * 100) : null
+    };
+}
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("COLEGIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
-
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(0.4);
-    doc.line(40, 109, 170, 109);
-
-    doc.setFontSize(22);
-    doc.setFont("helvetica", "bold");
-    doc.text("GESTIÓN CHROMEBOOKS", 105, 124, { align: 'center' });
-
-    doc.setFillColor(13, 104, 50);
-    doc.roundedRect(55, 130, 100, 16, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${mesActual.toUpperCase()} ${anioActual}`, 105, 141, { align: 'center' });
-
-    doc.setFontSize(9);
-    doc.text("RESUMEN EJECUTIVO", 105, 170, { align: 'center' });
-
-    const portadaKpis = [
-        { label: 'Préstamos', value: total },
-        { label: 'Devueltos OK', value: ok },
-        { label: 'Pendientes',  value: activos },
-        { label: 'Con Daños',   value: dmg }
-    ];
-    const pkW = 38, pkH = 22, pkY = 178, pkX0 = 14 + (182 - portadaKpis.length * pkW - 3 * 6) / 2;
-    portadaKpis.forEach((k, i) => {
-        const px = pkX0 + i * (pkW + 6);
-        doc.setFillColor(0, 80, 150);
-        doc.roundedRect(px, pkY, pkW, pkH, 2, 2, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text(String(k.value), px + pkW / 2, pkY + 11, { align: 'center' });
-        doc.setFontSize(6.5);
-        doc.setFont("helvetica", "normal");
-        doc.text(k.label.toUpperCase(), px + pkW / 2, pkY + 18, { align: 'center' });
+function _weeklyData(rows, anio, mes) {
+    const ranges = getWeekRanges(anio, mes);
+    const keys = Object.keys(ranges).map(Number).sort((a, b) => a - b);
+    const used = new Set();
+    const weeks = keys.map(w => {
+        const r = ranges[w];
+        const sel = rows.filter(d => {
+            const day = new Date(d.fecha + "T00:00:00").getDate();
+            return day >= r.start && day <= r.end;
+        });
+        sel.forEach(d => used.add(d));
+        return { n: w, label: r.label || `Semana ${w}`, start: r.start, end: r.end, ...(_aggRows(sel)) };
     });
+    const fuera = rows.filter(d => !used.has(d));
+    return { weeks, fuera };
+}
 
-    doc.setFontSize(11);
+// ---------- Primitivas de dibujo ----------
+function _pdfHeader(doc, ctx, titulo, lineas) {
+    const H = ctx.headerH;
+    doc.setFillColor(...PDF_C.navy);
+    doc.rect(0, 0, 210, H, 'F');
+    if (ctx.logo) {
+        const lh = H - 10;
+        doc.addImage(ctx.logo, 'PNG', 210 - 14 - lh * 0.79, 5, lh * 0.79, lh);
+    }
+    doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.text(`Tasa de retorno: ${tasa}%`, 105, 218, { align: 'center' });
-
-    doc.setFontSize(8);
+    doc.setFontSize(16);
+    doc.text(titulo, 14, 14);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(200, 220, 255);
-    doc.text(`Emitido: ${fechaEmision}`, 105, 232, { align: 'center' });
-    doc.text(`Responsable: Franco San Martín — Técnico Informático`, 105, 239, { align: 'center' });
-    doc.text(`Área de Informática · NSG ${anioActual}`, 105, 246, { align: 'center' });
+    doc.setFontSize(9);
+    (lineas || []).forEach((t, i) => doc.text(t, 14, 23 + i * 7.5));
+}
 
-    const HEADER_H = 38;
+function _pdfNewPage(doc, ctx, titulo, lineas) {
     doc.addPage();
-    doc.setFillColor(0, 51, 102);
-    doc.rect(0, 0, 210, HEADER_H, 'F');
-    if (logoBase64) doc.addImage(logoBase64, 'PNG', 181, 4, 22, 27.8);
+    _pdfHeader(doc, ctx, titulo, lineas);
+    return ctx.headerH + 8;
+}
 
+function _pdfMiniHeader(doc, texto) {
+    doc.setFillColor(...PDF_C.navy);
+    doc.rect(0, 0, 210, 12, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(17);
     doc.setFont("helvetica", "bold");
-    doc.text("GESTIÓN CHROMEBOOKS 2026", 14, 14);
     doc.setFontSize(9);
+    doc.text(texto, 14, 8);
+}
+
+// Si no queda espacio, agrega página (con cabecera mini) y devuelve el nuevo Y
+function _pdfEnsure(doc, y, need, textoMini) {
+    if (y + need <= 282) return y;
+    doc.addPage();
+    _pdfMiniHeader(doc, textoMini);
+    return 22;
+}
+
+function _pdfSection(doc, texto, x, y) {
+    doc.setFillColor(...PDF_C.green);
+    doc.rect(x, y - 3.2, 1.6, 4.4, 'F');
+    doc.setTextColor(...PDF_C.navy);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(texto, x + 3.5, y);
+}
+
+function _pdfCard(doc, x, y, w, h, valor, etiqueta, rgb, txt) {
+    doc.setFillColor(...rgb);
+    doc.roundedRect(x, y, w, h, 2, 2, 'F');
+    doc.setTextColor(...(txt || [255, 255, 255]));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(String(valor), x + w / 2, y + h * 0.5, { align: 'center' });
     doc.setFont("helvetica", "normal");
-    doc.text(`Reporte Mensual: ${mesActual.toUpperCase()} ${anioActual}`, 14, 23);
-    doc.text(`Emitido: ${fechaEmision}  ·  Responsable: Franco San Martín (Tec. Informático)`, 14, 31);
+    doc.setFontSize(6);
+    doc.text(etiqueta.toUpperCase(), x + w / 2, y + h * 0.8, { align: 'center' });
+}
 
-    const docentesMap = {};
-    mesData.forEach(d => {
-        const k = d.profesor ? d.profesor.trim() : "—";
-        if (!docentesMap[k]) docentesMap[k] = { total: 0, ok: 0, reemp: 0, lab: 0, dmg: 0 };
-        docentesMap[k].total++;
-        if ((parseInt(d.chromebooks) + parseInt(d.reemplazo)) === parseInt(d.devueltos) && parseInt(d.devueltos) > 0) docentesMap[k].ok++;
-        if (parseInt(d.reemplazo || 0) > 0) docentesMap[k].reemp++;
-        if (d.uso_laboratorio === true || d.uso_laboratorio === "TRUE" || d.uso_laboratorio === "true") docentesMap[k].lab++;
-        if (isDamagedRecord(d)) docentesMap[k].dmg++;
+function _pdfStatCard(doc, x, y, w, h, etiqueta, valor, sub, rgb) {
+    doc.setFillColor(...rgb);
+    doc.roundedRect(x, y, w, h, 2.5, 2.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.text(etiqueta.toUpperCase(), x + w / 2, y + 6, { align: 'center' });
+    doc.setFontSize(16);
+    doc.text(String(valor), x + w / 2, y + h * 0.62, { align: 'center' });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.text(sub, x + w / 2, y + h - 3.2, { align: 'center' });
+}
+
+function _pdfPanel(doc, x, y, w, h) {
+    doc.setFillColor(...PDF_C.soft);
+    doc.setDrawColor(...PDF_C.line);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, w, h, 2, 2, 'FD');
+}
+
+function _pdfEmptyBox(doc, x, y, w, texto, rgb) {
+    doc.setFillColor(...PDF_C.soft);
+    doc.setDrawColor(...(rgb || PDF_C.green2));
+    doc.setLineWidth(0.4);
+    doc.roundedRect(x, y, w, 12, 2, 2, 'FD');
+    doc.setTextColor(...(rgb || PDF_C.green2));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(texto, x + w / 2, y + 7.4, { align: 'center' });
+}
+
+function _pdfHBars(doc, o) {
+    const { x, y, w, items, rowH = 5.4, labelW = 50, max } = o;
+    const m = Math.max(max || 0, ...items.map(i => i.value), 1);
+    const barMaxW = w - labelW - 12;
+    let cy = y;
+    items.forEach((it, i) => {
+        if (i % 2 === 0) { doc.setFillColor(...PDF_C.soft); doc.rect(x, cy, w, rowH, 'F'); }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.8);
+        doc.setTextColor(...PDF_C.text);
+        doc.text(String(it.label), x + 1.5, cy + rowH * 0.68);
+        const bw = it.value > 0 ? Math.max(0.8, barMaxW * it.value / m) : 0;
+        if (bw > 0) {
+            doc.setFillColor(...(it.color || PDF_C.green));
+            doc.rect(x + labelW, cy + 1, bw, rowH - 2, 'F');
+        }
+        doc.setFont("helvetica", "bold");
+        doc.text(String(it.value), x + labelW + bw + 1.8, cy + rowH * 0.68);
+        cy += rowH;
     });
+    return cy;
+}
 
-    const todosDocentes = Object.entries(docentesMap).sort((a, b) => b[1].total - a[1].total);
+function _pdfNiceStep(max) {
+    if (max <= 5) return 1;
+    if (max <= 10) return 2;
+    if (max <= 25) return 5;
+    if (max <= 60) return 10;
+    if (max <= 120) return 20;
+    if (max <= 300) return 50;
+    return 100;
+}
 
-    doc.autoTable({
-        startY: 45,
-        head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
-        body: todosDocentes.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? v.reemp : '—', v.lab > 0 ? v.lab : '—', v.dmg > 0 ? v.dmg : '—']),
-        headStyles: { fillColor: [0, 51, 102], fontSize: 7, fontStyle: 'bold', textColor: 255 },
-        bodyStyles: { fontSize: 7 },
-        alternateRowStyles: { fillColor: [245, 248, 255] },
-        margin: { left: 14, right: 14 }
-    });
+function _pdfVBars(doc, o) {
+    const { x, y, w, h, labels, values, colors } = o;
+    const padT = 7, padB = 8, padL = 9;
+    const plotX = x + padL, plotY = y + padT, plotW = w - padL - 3, plotH = h - padT - padB;
+    const rawMax = Math.max(...values, 1);
+    const step = _pdfNiceStep(rawMax);
+    const top = Math.ceil(rawMax / step) * step;
 
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(128);
-        doc.text("Área de Informática – Responsable: Franco San Martín – NSG 2026", 14, 290);
-        doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+    doc.setDrawColor(...PDF_C.line);
+    doc.setLineWidth(0.2);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    doc.setTextColor(...PDF_C.muted);
+    for (let v = 0; v <= top; v += step) {
+        const gy = plotY + plotH - (v / top) * plotH;
+        doc.line(plotX, gy, plotX + plotW, gy);
+        doc.text(String(v), plotX - 1.5, gy + 1, { align: 'right' });
     }
 
-    doc.save(`Reporte_Franco_${mesActual}_${anioActual}.pdf`);
+    const slot = plotW / values.length;
+    const bw = Math.min(slot * 0.62, 14);
+    values.forEach((v, i) => {
+        const bh = (v / top) * plotH;
+        const bx = plotX + slot * i + (slot - bw) / 2;
+        if (bh > 0) {
+            doc.setFillColor(...(colors ? colors[i] : PDF_C.green));
+            doc.rect(bx, plotY + plotH - bh, bw, bh, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6.5);
+            doc.setTextColor(...PDF_C.text);
+            doc.text(String(v), bx + bw / 2, plotY + plotH - bh - 1.2, { align: 'center' });
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(...PDF_C.muted);
+        doc.text(String(labels[i]), bx + bw / 2, plotY + plotH + 4.5, { align: 'center' });
+    });
+}
+
+// Barras (préstamos) + línea (tasa de retorno %) con eje derecho 0-100%
+function _pdfTrend(doc, o) {
+    const { x, y, w, h, labels, bars, rates } = o;
+    const padT = 9, padB = 8, padL = 9, padR = 12;
+    const plotX = x + padL, plotY = y + padT, plotW = w - padL - padR, plotH = h - padT - padB;
+    const top = Math.max(2, Math.ceil(Math.max(...bars, 1) / 2) * 2);
+
+    doc.setDrawColor(...PDF_C.line);
+    doc.setLineWidth(0.2);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    [0, 0.5, 1].forEach(f => {
+        const gy = plotY + plotH - f * plotH;
+        doc.line(plotX, gy, plotX + plotW, gy);
+        doc.setTextColor(...PDF_C.muted);
+        doc.text(String(Math.round(top * f)), plotX - 1.5, gy + 1, { align: 'right' });
+        doc.text(`${Math.round(100 * f)}%`, plotX + plotW + 1.5, gy + 1);
+    });
+
+    const slot = plotW / bars.length;
+    const bw = Math.min(slot * 0.5, 22);
+    const pts = [];
+    bars.forEach((v, i) => {
+        const bh = (v / top) * plotH;
+        const cx = plotX + slot * i + slot / 2;
+        if (bh > 0) {
+            doc.setFillColor(...PDF_C.bar);
+            doc.rect(cx - bw / 2, plotY + plotH - bh, bw, bh, 'F');
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6.5);
+            if (bh >= 6) {
+                doc.setTextColor(255, 255, 255);
+                doc.text(String(v), cx, plotY + plotH - 1.8, { align: 'center' });
+            } else {
+                doc.setTextColor(...PDF_C.text);
+                doc.text(String(v), cx, plotY + plotH - bh - 1.2, { align: 'center' });
+            }
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...PDF_C.muted);
+        doc.text(String(labels[i]), cx, plotY + plotH + 4.5, { align: 'center' });
+        pts.push(rates[i] === null || rates[i] === undefined ? null : { px: cx, py: plotY + plotH - (rates[i] / 100) * plotH, r: rates[i] });
+    });
+
+    doc.setDrawColor(...PDF_C.green);
+    doc.setLineWidth(0.8);
+    for (let i = 1; i < pts.length; i++) {
+        if (pts[i - 1] && pts[i]) doc.line(pts[i - 1].px, pts[i - 1].py, pts[i].px, pts[i].py);
+    }
+    pts.forEach(p => {
+        if (!p) return;
+        doc.setFillColor(...PDF_C.green);
+        doc.circle(p.px, p.py, 1.2, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...PDF_C.green);
+        doc.text(`${p.r}%`, p.px, p.py - 2.2, { align: 'center' });
+    });
+
+    // Leyenda
+    doc.setFillColor(...PDF_C.bar);
+    doc.rect(x + w - 62, y + 2.2, 3, 3, 'F');
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...PDF_C.text);
+    doc.text('Préstamos', x + w - 58, y + 4.7);
+    doc.setFillColor(...PDF_C.green);
+    doc.rect(x + w - 33, y + 2.2, 3, 3, 'F');
+    doc.text('Tasa retorno', x + w - 29, y + 4.7);
+}
+
+// autoTable con cabecera mini en las páginas de continuación
+function _pdfTable(doc, cfg, miniTitle) {
+    const firstPage = doc.internal.getCurrentPageInfo().pageNumber;
+    doc.autoTable({
+        margin: { top: 18, left: 14, right: 14, bottom: 18 },
+        styles: { cellPadding: 1.3, fontSize: 7, textColor: PDF_C.text, overflow: 'linebreak' },
+        headStyles: { fillColor: PDF_C.navy, fontSize: 7, fontStyle: 'bold', textColor: 255 },
+        alternateRowStyles: { fillColor: PDF_C.soft },
+        ...cfg,
+        didDrawPage: d => {
+            if (doc.internal.getCurrentPageInfo().pageNumber > firstPage) _pdfMiniHeader(doc, miniTitle);
+            if (cfg.didDrawPage) cfg.didDrawPage(d);
+        }
+    });
+    return doc.lastAutoTable.finalY;
+}
+
+// ---------- Generador principal ----------
+async function generatePDF() {
+    const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) {
+        Swal.fire('Error', 'La librería de PDF no está cargada.', 'error');
+        return;
+    }
+
+    const anio = viewDate.getFullYear();
+    const mes = viewDate.getMonth();
+    const mesNombre = mNames[mes];
+    const rowsAct = _recordsOf(anio, mes);
+    if (rowsAct.length === 0) {
+        Swal.fire('Sin datos', `No hay registros en ${mesNombre} ${anio} para generar el informe.`, 'info');
+        return;
+    }
+
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.style.display = 'flex';
+
+    try {
+        const doc = new jsPDFCtor();
+        const hoy = new Date();
+        const ctx = { logo: await _pdfLoadLogo(), headerH: 36, anio, mesNombre, emision: _fmtFechaCL(hoy) };
+
+        const S = _statsOf(rowsAct);
+        const prevD = new Date(anio, mes - 1, 1);
+        const prevAnio = prevD.getFullYear();
+        const prevMes = prevD.getMonth();
+        const prevNombre = mNames[prevMes];
+        const prevLabel = prevAnio !== anio ? `${prevNombre} ${prevAnio}` : prevNombre;
+        const prevAbbr = prevNombre.slice(0, 3).toUpperCase();
+        const curAbbr = mesNombre.slice(0, 3).toUpperCase();
+        const P = _statsOf(_recordsOf(prevAnio, prevMes));
+        const hasPrev = P.total > 0;
+        const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+        const parcial = hoy.getFullYear() === anio && hoy.getMonth() === mes && hoy.getDate() < ultimoDia;
+        const pages = {};
+
+        // ===== PÁGINA 1: PORTADA =====
+        doc.setFillColor(...PDF_C.navy);
+        doc.rect(0, 0, 210, 297, 'F');
+        doc.setFillColor(...PDF_C.navy2);
+        doc.rect(0, 180, 210, 117, 'F');
+        doc.setFillColor(...PDF_C.green);
+        doc.rect(0, 155, 210, 6, 'F');
+
+        if (ctx.logo) doc.addImage(ctx.logo, 'PNG', 80, 28, 50, 63.3);
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text("COLEGIO NUESTRA SEÑORA DE GUADALUPE", 105, 105, { align: 'center' });
+        doc.setDrawColor(255, 255, 255);
+        doc.setLineWidth(0.4);
+        doc.line(40, 109, 170, 109);
+
+        doc.setFontSize(22);
+        doc.setFont("helvetica", "bold");
+        doc.text("GESTIÓN CHROMEBOOKS", 105, 124, { align: 'center' });
+
+        doc.setFillColor(...PDF_C.green);
+        doc.roundedRect(55, 130, 100, 16, 3, 3, 'F');
+        doc.setFontSize(14);
+        doc.text(`${mesNombre.toUpperCase()} ${anio}`, 105, 141, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.text("RESUMEN EJECUTIVO", 105, 170, { align: 'center' });
+
+        const portadaKpis = [
+            { label: 'Préstamos', value: S.total },
+            { label: 'Devueltos OK', value: S.ok },
+            { label: 'Pendientes', value: S.pend },
+            { label: 'Con Daños', value: S.dmg }
+        ];
+        const pkW = 38, pkH = 22, pkY = 178, pkX0 = 14 + (182 - portadaKpis.length * pkW - 3 * 6) / 2;
+        portadaKpis.forEach((k, i) => {
+            const px = pkX0 + i * (pkW + 6);
+            doc.setFillColor(...PDF_C.navy3);
+            doc.roundedRect(px, pkY, pkW, pkH, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text(String(k.value), px + pkW / 2, pkY + 11, { align: 'center' });
+            doc.setFontSize(6.5);
+            doc.setFont("helvetica", "normal");
+            doc.text(k.label.toUpperCase(), px + pkW / 2, pkY + 18, { align: 'center' });
+        });
+
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Tasa de retorno: ${S.tasa}%`, 105, 214, { align: 'center' });
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(200, 220, 255);
+        doc.text(`Emitido: ${ctx.emision}${parcial ? '  ·  Mes en curso (datos parciales)' : ''}`, 105, 224, { align: 'center' });
+        doc.text(`Responsable: Franco San Martín — Técnico Informático`, 105, 230, { align: 'center' });
+        doc.text(`Área de Informática · NSG ${anio}`, 105, 236, { align: 'center' });
+
+        // ===== PÁGINA 2: USO POR DOCENTE =====
+        let y = _pdfNewPage(doc, ctx, `GESTIÓN CHROMEBOOKS ${anio}`, [
+            `Reporte Mensual: ${mesNombre.toUpperCase()} ${anio}`,
+            `Emitido: ${ctx.emision}  ·  Responsable: Franco San Martín (Tec. Informático)`
+        ]);
+        pages.docentes = doc.internal.getNumberOfPages();
+
+        const kp = [
+            [S.total, 'Total préstamos', PDF_C.green],
+            [S.ok, 'Devoluciones OK', PDF_C.green2],
+            [S.pend, 'Pendientes', [255, 193, 7], [60, 40, 0]],
+            [S.dmg, 'Con daños', PDF_C.redDark],
+            [S.lab, 'Uso laboratorio', PDF_C.purple],
+            [S.reemp, 'Con reemplazos', PDF_C.red]
+        ];
+        const cw = (182 - 5 * 4) / 6;
+        kp.forEach((k, i) => _pdfCard(doc, 14 + i * (cw + 4), y, cw, 20, k[0], k[1], k[2], k[3]));
+        y += 26;
+
+        doc.setFillColor(...PDF_C.navy);
+        doc.roundedRect(14, y, 182, 10, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.text(`TASA DE RETORNO: ${S.tasa}%  ·  Stock: ${STOCK_MAXIMO} Chromebooks + ${STOCK_REEMPLAZO} Reemplazos`, 105, y + 6.3, { align: 'center' });
+        y += 18;
+
+        _pdfSection(doc, `Uso por Docente — ${S.docentes} docente${S.docentes !== 1 ? 's' : ''} registrado${S.docentes !== 1 ? 's' : ''}`, 14, y);
+        const docentesOrden = Object.entries(S.porDoc).sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]));
+
+        _pdfTable(doc, {
+            startY: y + 3,
+            head: [['#', 'Docente Responsable', 'Préstamos', 'Dev. OK', 'Reemplazo', 'Lab', 'Daños']],
+            body: docentesOrden.map(([nombre, v], i) => [i + 1, nombre, v.total, v.ok, v.reemp > 0 ? v.reemp : '—', v.lab > 0 ? v.lab : '—', v.dmg > 0 ? v.dmg : '—']),
+            columnStyles: { 0: { cellWidth: 10 } }
+        }, `Uso por docente — ${mesNombre} ${anio} (cont.)`);
+
+        // ===== PÁGINA 3: DASHBOARD =====
+        y = _pdfNewPage(doc, ctx, 'DASHBOARD · ANÁLISIS VISUAL', [
+            `${mesNombre.toUpperCase()} ${anio} | ${S.total} préstamos | Tasa retorno: ${S.tasa}% | ${S.docentes} docentes`
+        ]);
+        pages.dashboard = doc.internal.getNumberOfPages();
+
+        // Estado de equipos
+        _pdfPanel(doc, 14, y, 88, 58);
+        _pdfSection(doc, 'ESTADO DE EQUIPOS DEL MES', 17, y + 7);
+        _pdfHBars(doc, {
+            x: 17, y: y + 12, w: 82, rowH: 8.2, labelW: 24, max: Math.max(S.total, 1),
+            items: [
+                { label: 'Entregados', value: S.ok, color: PDF_C.green2 },
+                { label: 'Pendientes', value: S.pend, color: PDF_C.amber },
+                { label: 'Dañados', value: S.dmg, color: PDF_C.redDark },
+                { label: 'Laboratorio', value: S.lab, color: PDF_C.purple },
+                { label: 'Reemplazos', value: S.reemp, color: PDF_C.red }
+            ]
+        });
+
+        // Préstamos por mes del año
+        const mensual = mNames.map((_, i) => _recordsOf(anio, i).length);
+        _pdfPanel(doc, 108, y, 88, 58);
+        _pdfSection(doc, `PRÉSTAMOS POR MES - ${anio}`, 111, y + 7);
+        _pdfVBars(doc, {
+            x: 109, y: y + 8, w: 86, h: 49,
+            labels: mNames.map(m => m.slice(0, 1)),
+            values: mensual,
+            colors: mensual.map((_, i) => i === mes ? PDF_C.green : PDF_C.bar)
+        });
+        y += 64;
+
+        // Tendencia semanal
+        const W = _weeklyData(rowsAct, anio, mes);
+        _pdfPanel(doc, 14, y, 182, 58);
+        _pdfSection(doc, 'TENDENCIA SEMANAL — PRÉSTAMOS Y TASA DE RETORNO', 17, y + 7);
+        _pdfTrend(doc, {
+            x: 15, y: y + 8, w: 180, h: 49,
+            labels: W.weeks.map(wk => `S${wk.n}`),
+            bars: W.weeks.map(wk => wk.prest),
+            rates: W.weeks.map(wk => wk.tasa)
+        });
+        y += 64;
+
+        // Préstamos por docente (con continuación)
+        const itemsDoc = docentesOrden.map(([nombre, v]) => ({ label: nombre, value: v.total, color: PDF_C.green }));
+        const maxDoc = itemsDoc.length ? itemsDoc[0].value : 1;
+        const ROW_H = 5.2;
+        let idx = 0, primera = true, by = y;
+        _pdfSection(doc, 'PRÉSTAMOS POR DOCENTE', 14, by + 3);
+        by += 7;
+        while (idx < itemsDoc.length) {
+            if (!primera) {
+                by = _pdfNewPage(doc, ctx, 'PRÉSTAMOS POR DOCENTE (cont.)', [`${mesNombre.toUpperCase()} ${anio}`]);
+            }
+            const cap = Math.max(1, Math.floor((284 - by) / ROW_H));
+            const chunk = itemsDoc.slice(idx, idx + cap);
+            _pdfHBars(doc, { x: 14, y: by, w: 182, rowH: ROW_H, labelW: 56, max: maxDoc, items: chunk });
+            idx += chunk.length;
+            primera = false;
+        }
+
+        // ===== CONSOLIDADO vs MES ANTERIOR =====
+        if (hasPrev) {
+            const lineasCons = [`Generado: ${ctx.emision} · Responsable: Franco San Martín`];
+            if (parcial) lineasCons.push(`Mes en curso: datos hasta el ${ctx.emision} (la comparación es parcial)`);
+            y = _pdfNewPage(doc, ctx, `CONSOLIDADO: ${mesNombre.toUpperCase()} vs ${prevLabel.toUpperCase()}`, lineasCons);
+            pages.consolidado = doc.internal.getNumberOfPages();
+
+            // Comparación de préstamos
+            _pdfPanel(doc, 14, y, 70, 58);
+            _pdfSection(doc, 'COMPARACIÓN DE PRÉSTAMOS', 17, y + 7);
+            _pdfVBars(doc, {
+                x: 15, y: y + 8, w: 68, h: 42,
+                labels: [prevAbbr, curAbbr], values: [P.total, S.total], colors: [PDF_C.bar, PDF_C.green]
+            });
+            const pctPrest = P.total > 0 ? Math.round(((S.total - P.total) / P.total) * 100) : 0;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(...(pctPrest >= 0 ? PDF_C.green : PDF_C.red));
+            doc.text(`${pctPrest > 0 ? '+' : ''}${pctPrest}%`, 49, y + 55.5, { align: 'center' });
+
+            // Tabla de métricas
+            const metricas = [
+                ['Préstamos totales', P.total, S.total, S.total - P.total, 1, ''],
+                ['Devueltos OK', P.ok, S.ok, S.ok - P.ok, 1, ''],
+                ['Tasa de retorno', `${P.tasa}%`, `${S.tasa}%`, S.tasa - P.tasa, 1, '%'],
+                ['Laboratorio', P.lab, S.lab, S.lab - P.lab, 0, ''],
+                ['Reemplazos', P.reemp, S.reemp, S.reemp - P.reemp, -1, ''],
+                ['Dañados', P.dmg, S.dmg, S.dmg - P.dmg, -1, ''],
+                ['Docentes activos', P.docentes, S.docentes, S.docentes - P.docentes, 0, ''],
+                ['Pendientes', P.pend, S.pend, S.pend - P.pend, -1, '']
+            ];
+            doc.autoTable({
+                startY: y,
+                margin: { left: 90, right: 14 },
+                tableWidth: 106,
+                head: [['MÉTRICA', prevAbbr, curAbbr, 'VAR.']],
+                body: metricas.map(m => [m[0], m[1], m[2], m[5] ? `${m[3] > 0 ? '+' : ''}${m[3]}${m[5]}` : _sgn(m[3])]),
+                styles: { cellPadding: 1.4, fontSize: 7, textColor: PDF_C.text },
+                headStyles: { fillColor: PDF_C.navy, fontSize: 7, fontStyle: 'bold', textColor: 255 },
+                alternateRowStyles: { fillColor: PDF_C.soft },
+                columnStyles: { 0: { cellWidth: 44 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' } },
+                didParseCell: d => {
+                    if (d.section === 'body' && d.column.index === 3) {
+                        const m = metricas[d.row.index];
+                        const bueno = m[3] * m[4];
+                        d.cell.styles.fontStyle = 'bold';
+                        d.cell.styles.textColor = m[3] === 0 || m[4] === 0 ? PDF_C.muted : (bueno > 0 ? PDF_C.green : PDF_C.red);
+                    }
+                }
+            });
+            y += 64;
+
+            // Tarjetas destacadas
+            const kw = (182 - 8) / 3;
+            const dTasa = S.tasa - P.tasa;
+            _pdfStatCard(doc, 14, y, kw, 25, 'Mejor indicador del mes', `Tasa ${S.tasa}%`, (dTasa === 0 ? `igual que ${prevAbbr}` : `${_sgn(dTasa)}% vs ${prevAbbr}`), PDF_C.green);
+            _pdfStatCard(doc, 14 + kw + 4, y, kw, 25, 'Crecimiento en préstamos', `${pctPrest > 0 ? '+' : ''}${pctPrest}%`, `${P.total} a ${S.total} préstamos${parcial ? ' (parcial)' : ''}`, pctPrest >= 0 ? PDF_C.navy3 : PDF_C.amber);
+            _pdfStatCard(doc, 14 + 2 * (kw + 4), y, kw, 25, 'Atención: reemplazos', S.reemp, (S.reemp === P.reemp ? `igual que ${prevAbbr}` : `${_sgn(S.reemp - P.reemp)} vs ${prevAbbr}`), PDF_C.red);
+            y += 33;
+
+            // Detalle por docente
+            _pdfSection(doc, `DETALLE POR DOCENTE — ${curAbbr} vs ${prevAbbr}`, 14, y);
+            const filasCons = docentesOrden.map(([nombre, v]) => {
+                const antes = P.porDoc[nombre] ? P.porDoc[nombre].total : 0;
+                return { nombre, antes, ahora: v.total, nuevo: antes === 0, lab: v.lab, reemp: v.reemp, dmg: v.dmg };
+            });
+            const maxAhora = Math.max(...filasCons.map(f => f.ahora), 1);
+            const tituloCons = `Consolidado docentes — ${curAbbr} vs ${prevAbbr} (cont.)`;
+            _pdfTable(doc, {
+                startY: y + 3,
+                head: [['#', 'DOCENTE', prevAbbr, curAbbr, 'VAR.', 'LAB', 'REEMP', 'DAÑO', 'BARRA']],
+                body: filasCons.map((f, i) => [
+                    i + 1, (f.nuevo ? '* ' : '') + f.nombre, f.antes > 0 ? f.antes : '—', f.ahora,
+                    f.nuevo ? 'NUEVO' : _sgn(f.ahora - f.antes),
+                    f.lab > 0 ? f.lab : '—', f.reemp > 0 ? f.reemp : '—', f.dmg > 0 ? f.dmg : '—', ''
+                ]),
+                columnStyles: {
+                    0: { cellWidth: 8 }, 1: { cellWidth: 52 }, 2: { cellWidth: 14, halign: 'center' },
+                    3: { cellWidth: 14, halign: 'center' }, 4: { cellWidth: 16, halign: 'center' },
+                    5: { cellWidth: 12, halign: 'center' }, 6: { cellWidth: 14, halign: 'center' },
+                    7: { cellWidth: 12, halign: 'center' }, 8: { cellWidth: 40 }
+                },
+                didParseCell: d => {
+                    if (d.section === 'body' && d.column.index === 4) {
+                        const f = filasCons[d.row.index];
+                        d.cell.styles.fontStyle = 'bold';
+                        d.cell.styles.textColor = f.nuevo ? PDF_C.navy3 : (f.ahora > f.antes ? PDF_C.green : (f.ahora < f.antes ? PDF_C.red : PDF_C.muted));
+                    }
+                },
+                didDrawCell: d => {
+                    if (d.section === 'body' && d.column.index === 8) {
+                        const f = filasCons[d.row.index];
+                        const bw = (d.cell.width - 3) * (f.ahora / maxAhora);
+                        doc.setFillColor(...PDF_C.green);
+                        doc.rect(d.cell.x + 1.5, d.cell.y + 1.3, Math.max(0.6, bw), d.cell.height - 2.6, 'F');
+                    }
+                }
+            }, tituloCons);
+
+            let fy = doc.lastAutoTable.finalY + 5;
+            const sinPrest = Object.keys(P.porDoc).filter(k => !S.porDoc[k]).length;
+            const notas = [];
+            if (filasCons.some(f => f.nuevo)) notas.push(`* Docente nuevo: no registró préstamos en ${prevLabel}.`);
+            if (sinPrest > 0) notas.push(`${sinPrest} docente${sinPrest !== 1 ? 's' : ''} de ${prevLabel} no registra${sinPrest !== 1 ? 'n' : ''} préstamos este mes.`);
+            if (notas.length) {
+                fy = _pdfEnsure(doc, fy, notas.length * 5 + 2, tituloCons);
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(7);
+                doc.setTextColor(...PDF_C.muted);
+                notas.forEach((t, i) => doc.text(t, 14, fy + i * 5));
+            }
+        }
+
+        // ===== OBSERVACIONES =====
+        const obsOrdenadas = [...S.obs].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        y = _pdfNewPage(doc, ctx, `OBSERVACIONES DEL MES — ${mesNombre.toUpperCase()} ${anio}`, [
+            `${obsOrdenadas.length} registro${obsOrdenadas.length !== 1 ? 's' : ''} con observación · Generado: ${ctx.emision}`
+        ]);
+        pages.obs = doc.internal.getNumberOfPages();
+
+        const estadoTxt = d => isDamagedRecord(d) ? 'DAÑADO' : (_isOk(d) ? 'CERRADO' : 'PENDIENTE');
+        const fechaCorta = d => (d.fecha || '').split('-').reverse().slice(0, 2).join('/');
+        if (obsOrdenadas.length === 0) {
+            _pdfEmptyBox(doc, 14, y, 182, 'Sin observaciones registradas este mes');
+            y += 20;
+        } else {
+            y = _pdfTable(doc, {
+                startY: y,
+                head: [['FECHA', 'DOCENTE', 'CURSO', 'ASIGNATURA', 'ESTADO', 'OBSERVACIÓN']],
+                body: obsOrdenadas.map(d => [fechaCorta(d), _normProf(d), d.curso || '—', d.asignatura || '—', estadoTxt(d), (d.observacion || '').trim()]),
+                columnStyles: { 0: { cellWidth: 14 }, 1: { cellWidth: 38 }, 2: { cellWidth: 18 }, 3: { cellWidth: 32 }, 4: { cellWidth: 20 } }
+            }, `Observaciones — ${mesNombre} ${anio} (cont.)`) + 10;
+        }
+
+        // ===== DAÑOS Y OBSERVACIONES vs MES ANTERIOR =====
+        y = _pdfEnsure(doc, y, 135, `Daños y observaciones — ${mesNombre} ${anio}`);
+        pages.danios = doc.internal.getNumberOfPages();
+        _pdfSection(doc, hasPrev ? `DAÑOS Y OBSERVACIONES: ${curAbbr} vs ${prevAbbr}` : 'DAÑOS Y OBSERVACIONES', 14, y);
+        y += 4;
+
+        const acumRows = db.filter(d => {
+            const dt = new Date(d.fecha + "T00:00:00");
+            return !isNaN(dt) && dt.getFullYear() === anio && dt.getMonth() <= mes;
+        });
+        const A = _statsOf(acumRows);
+        const dw = (182 - 12) / 4;
+        const subDelta = (cur, prev) => hasPrev ? (cur === prev ? `igual que ${prevAbbr}` : `${_sgn(cur - prev)} vs ${prevAbbr}`) : mesNombre;
+        _pdfStatCard(doc, 14, y, dw, 25, 'Daños mes actual', S.dmg, subDelta(S.dmg, P.dmg), S.dmg > 0 ? PDF_C.redDark : PDF_C.green2);
+        _pdfStatCard(doc, 14 + (dw + 4), y, dw, 25, 'Obs. mes actual', S.obs.length, subDelta(S.obs.length, P.obs.length), PDF_C.amber);
+        _pdfStatCard(doc, 14 + 2 * (dw + 4), y, dw, 25, 'Daños acumulado año', A.dmg, `Ene - ${curAbbr}`, PDF_C.navy3);
+        _pdfStatCard(doc, 14 + 3 * (dw + 4), y, dw, 25, 'Obs. acumulado año', A.obs.length, `Ene - ${curAbbr}`, PDF_C.navy2);
+        y += 33;
+
+        _pdfSection(doc, `DETALLE DE DAÑOS — ${mesNombre.toUpperCase()} (${S.dmg} registro${S.dmg !== 1 ? 's' : ''})`, 14, y);
+        y += 3;
+        if (S.dmg === 0) {
+            _pdfEmptyBox(doc, 14, y, 182, 'Sin equipos dañados este mes');
+            y += 20;
+        } else {
+            y = _pdfTable(doc, {
+                startY: y,
+                head: [['FECHA', 'DOCENTE', 'CURSO', 'ASIGNATURA', 'DETALLE DEL DAÑO']],
+                body: S.dmgRows.map(d => [fechaCorta(d), _normProf(d), d.curso || '—', d.asignatura || '—', (d.observacion || 'Daño reportado').trim()]),
+                headStyles: { fillColor: PDF_C.redDark, fontSize: 7, fontStyle: 'bold', textColor: 255 },
+                columnStyles: { 0: { cellWidth: 14 }, 1: { cellWidth: 40 }, 2: { cellWidth: 18 }, 3: { cellWidth: 34 } }
+            }, `Detalle de daños — ${mesNombre} ${anio} (cont.)`) + 8;
+        }
+
+        if (hasPrev) {
+            y = _pdfEnsure(doc, y, 50, `Daños y observaciones — ${mesNombre} ${anio}`);
+            _pdfSection(doc, `COMPARATIVA VS ${prevLabel.toUpperCase()}: DAÑOS Y OBSERVACIONES`, 14, y);
+            const compDan = [
+                ['Registros con daño', P.dmg, S.dmg],
+                ['Docentes con daño', P.docDmg, S.docDmg],
+                ['Registros con observación', P.obs.length, S.obs.length],
+                ['Docentes con observación', P.docObs, S.docObs]
+            ];
+            y = _pdfTable(doc, {
+                startY: y + 3,
+                head: [['MÉTRICA', prevAbbr, curAbbr, 'VAR.']],
+                body: compDan.map(r => [r[0], r[1], r[2], _sgn(r[2] - r[1])]),
+                columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' } },
+                didParseCell: d => {
+                    if (d.section === 'body' && d.column.index === 3) {
+                        const r = compDan[d.row.index];
+                        d.cell.styles.fontStyle = 'bold';
+                        d.cell.styles.textColor = r[2] === r[1] ? PDF_C.muted : (r[2] > r[1] ? PDF_C.red : PDF_C.green);
+                    }
+                }
+            }, `Comparativa — ${mesNombre} ${anio} (cont.)`) + 6;
+        }
+
+        // ===== RESUMEN SEMANAL Y ALERTAS =====
+        y = _pdfNewPage(doc, ctx, 'RESUMEN SEMANAL', [`${mesNombre.toUpperCase()} ${anio}`]);
+        pages.semanal = doc.internal.getNumberOfPages();
+
+        const filasSem = W.weeks.map(wk => [
+            `${wk.label} (${wk.start}–${wk.end})`, wk.prest, wk.chr, wk.ree, wk.ok, wk.tasa === null ? '—' : `${wk.tasa}%`
+        ]);
+        if (W.fuera.length > 0) {
+            const f = _aggRows(W.fuera);
+            filasSem.push(['Fuera de semanas lectivas', f.prest, f.chr, f.ree, f.ok, f.tasa === null ? '—' : `${f.tasa}%`]);
+        }
+        const T = _aggRows(rowsAct);
+        filasSem.push(['TOTAL MES', T.prest, T.chr, T.ree, T.ok, T.tasa === null ? '—' : `${T.tasa}%`]);
+
+        y = _pdfTable(doc, {
+            startY: y,
+            head: [['Período', 'Préstamos', 'Chromebooks', 'Reemplazos', 'Devueltos OK', 'Tasa']],
+            body: filasSem,
+            styles: { cellPadding: 2, fontSize: 8, textColor: PDF_C.text },
+            columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } },
+            didParseCell: d => {
+                if (d.section === 'body' && d.row.index === filasSem.length - 1) {
+                    d.cell.styles.fontStyle = 'bold';
+                    d.cell.styles.fillColor = [225, 235, 250];
+                }
+            }
+        }, `Resumen semanal — ${mesNombre} ${anio} (cont.)`) + 10;
+
+        const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+        const alertas = rowsAct.filter(_isDebt).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        y = _pdfEnsure(doc, y, 40, `Alertas de devolución — ${mesNombre} ${anio}`);
+        _pdfSection(doc, `ALERTA DE DEVOLUCIÓN — ${alertas.length} alerta${alertas.length !== 1 ? 's' : ''}`, 14, y);
+        y += 3;
+        if (alertas.length === 0) {
+            _pdfEmptyBox(doc, 14, y, 182, 'Sin alertas pendientes en este mes');
+        } else {
+            _pdfTable(doc, {
+                startY: y,
+                head: [['FECHA', 'DOCENTE', 'CURSO', 'ASIGNATURA', 'SIN DEVOLVER', 'DÍAS']],
+                body: alertas.map(d => {
+                    const falta = _n(d.chromebooks) + _n(d.reemplazo) - _n(d.devueltos);
+                    const dias = Math.max(0, Math.floor((hoy0 - new Date(d.fecha + "T00:00:00")) / 86400000));
+                    return [fechaCorta(d), _normProf(d), d.curso || '—', d.asignatura || '—', `${falta} equipo${falta !== 1 ? 's' : ''}`, dias === 0 ? 'HOY' : `${dias} d`];
+                }),
+                headStyles: { fillColor: PDF_C.redDark, fontSize: 7, fontStyle: 'bold', textColor: 255 },
+                columnStyles: { 0: { cellWidth: 14 }, 4: { cellWidth: 26, halign: 'center' }, 5: { cellWidth: 16, halign: 'center' } }
+            }, `Alertas de devolución — ${mesNombre} ${anio} (cont.)`);
+        }
+
+        // ===== PORTADA: CONTENIDO DEL REPORTE =====
+        doc.setPage(1);
+        doc.setFillColor(0, 38, 80);
+        doc.roundedRect(34, 244, 142, 40, 3, 3, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(140, 190, 240);
+        doc.text('CONTENIDO DEL REPORTE', 105, 251, { align: 'center' });
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(210, 225, 245);
+        const contenido = [
+            [pages.docentes, 'Tabla de uso por docente'],
+            [pages.dashboard, 'Dashboard visual y gráficos'],
+            ...(pages.consolidado ? [[pages.consolidado, `Consolidado vs ${prevLabel}`]] : []),
+            [pages.obs, 'Observaciones, daños y comparativa'],
+            [pages.semanal, 'Resumen semanal y alertas']
+        ];
+        contenido.forEach((c, i) => doc.text(`Pág. ${c[0]} — ${c[1]}`, 105, 258 + i * 5.2, { align: 'center' }));
+
+        // ===== PIE DE PÁGINA =====
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7);
+            if (i === 1) doc.setTextColor(150, 180, 220); else doc.setTextColor(128);
+            doc.text(`Área de Informática – Responsable: Franco San Martín – NSG ${anio}`, 14, 290);
+            doc.text(`Página ${i} de ${pageCount}`, 196, 290, { align: 'right' });
+        }
+
+        doc.save(`Reporte_Franco_${mesNombre}_${anio}.pdf`);
+    } catch (e) {
+        console.error('Error generando PDF:', e);
+        Swal.fire('Error', 'No se pudo generar el PDF: ' + e.message, 'error');
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
 }
 
 function renderAlertasPanel(mesCompleto) {
@@ -1661,8 +2415,8 @@ function renderAlertasPanel(mesCompleto) {
         html += `<div class="alerta-item" onclick="editItem('${d.id}')">
             <div class="${diasClass}"><div>${diasLabel}</div></div>
             <div class="alerta-info">
-                <div class="alerta-nombre">👤 ${d.profesor}</div>
-                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">${falta} equipo${falta !== 1 ? 's' : ''} sin devolver</b></div>
+                <div class="alerta-nombre">👤 ${_esc(d.profesor)}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${_esc(d.curso)} · ${_esc(d.asignatura)} · <b style="color:#c62828;">${falta} equipo${falta !== 1 ? 's' : ''} sin devolver</b></div>
             </div>
             <button class="btn btn-sm btn-outline-danger border-0 fw-bold" style="font-size:0.7rem;">Editar</button>
         </div>`;
@@ -1673,8 +2427,8 @@ function renderAlertasPanel(mesCompleto) {
         html += `<div class="alerta-item" onclick="editItem('${d.id}')" style="border-left: 3px solid #dc3545;">
             <div class="alerta-dias" style="background:#dc3545;"><div>⚠️</div></div>
             <div class="alerta-info">
-                <div class="alerta-nombre">👤 ${d.profesor}</div>
-                <div class="alerta-detalle">📅 ${fechaFmt} · ${d.curso} · ${d.asignatura} · <b style="color:#c62828;">🔴 ${d.observacion || 'Daño reportado'}</b></div>
+                <div class="alerta-nombre">👤 ${_esc(d.profesor)}</div>
+                <div class="alerta-detalle">📅 ${fechaFmt} · ${_esc(d.curso)} · ${_esc(d.asignatura)} · <b style="color:#c62828;">🔴 ${_esc(d.observacion || 'Daño reportado')}</b></div>
             </div>
             <button class="btn btn-sm btn-outline-danger border-0 fw-bold">Editar</button>
         </div>`;
@@ -1705,9 +2459,9 @@ function renderObsPanel(registros) {
         <div class="obs-item" onclick="editItem('${d.id}')" title="Click para editar este registro">
             <div class="obs-fecha-badge">${fechaStr}</div>
             <div class="obs-info">
-                <div class="obs-profesor">👤 ${d.profesor || '—'}</div>
-                <div class="obs-curso">🏫 ${d.curso || '—'} · 📚 ${d.asignatura || '—'}</div>
-                <div class="obs-texto">💬 ${obs}</div>
+                <div class="obs-profesor">👤 ${_esc(d.profesor || '—')}</div>
+                <div class="obs-curso">🏫 ${_esc(d.curso || '—')} · 📚 ${_esc(d.asignatura || '—')}</div>
+                <div class="obs-texto">💬 ${_esc(obs)}</div>
             </div>
         </div>`;
     }).join('');
@@ -1721,7 +2475,7 @@ function toggleObsPanel() {
 }
 
 function _calcMesData(mes) {
-    const año = new Date().getFullYear();
+    const año = viewDate.getFullYear();
     const rows = db.filter(d => {
         const dt = new Date(d.fecha + "T00:00:00");
         return !isNaN(dt) && dt.getFullYear() === año && dt.getMonth() === mes;
@@ -1744,7 +2498,7 @@ function _calcMesData(mes) {
 }
 
 function renderResumenAnual() {
-    const año = new Date().getFullYear();
+    const año = viewDate.getFullYear();
     const mesesConDatos = mNames.map((nombre, i) => ({ nombre, i, ..._calcMesData(i) }))
         .filter(m => m.total > 0);
 
@@ -1784,7 +2538,7 @@ function renderResumenAnual() {
 }
 
 function _irAMes(mesIdx) {
-    viewDate = new Date(new Date().getFullYear(), mesIdx, 1);
+    viewDate = new Date(viewDate.getFullYear(), mesIdx, 1);
     currentWeek = 0;
     filterMode  = 'all';
     showPage('registros');
