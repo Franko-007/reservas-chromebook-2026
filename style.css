@@ -338,12 +338,19 @@ thead th {
 .wizard-step.active .wizard-label { color: #0d6832; }
 .wizard-step.done .wizard-label { color: #0d6832; }
 
-.wizard-panel { display: none; animation: fadeInPanel 0.25s ease; }
-.wizard-panel.active { display: block; }
+.wizard-panel { 
+    display: none; 
+    opacity: 0; 
+    transition: opacity 0.2s ease-in-out; 
+}
+.wizard-panel.active { 
+    display: block; 
+    opacity: 1; 
+}
 
 @keyframes fadeInPanel {
-    from { opacity: 0; transform: translateX(8px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .wizard-nav {
@@ -637,3 +644,8 @@ body.dark-mode .sync-chip.sync-fresh   { background: #0d2a1a; border-color: #2e7
 body.dark-mode .sync-chip.sync-cache   { background: #2a2200; border-color: #856404; color: #ffc107; }
 body.dark-mode .sync-chip.sync-offline { background: #2a0a0a; border-color: #c62828; color: #ef9a9a; }
 body.dark-mode .sync-chip.sync-loading { background: #16213e; border-color: #2a2a4a; color: #666; }
+
+.modal-dialog-scrollable .modal-body {
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+}
