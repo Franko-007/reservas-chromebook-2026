@@ -1,13 +1,181 @@
 // ==================== CONFIGURACIÓN DE SUPABASE ====================
 const SUPABASE_URL = "https://nhvrzmezonadnxqalgui.supabase.co";
-const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tL_YS0Od"; // Reemplaza con tu clave anon / public
+// Clave "publishable": es pública por diseño. La seguridad real está en el login + RLS (ver supabase_seguridad_rls.sql)
+const SUPABASE_KEY = "sb_publishable_1aGEWqQBhlzTz-R8xJksZQ_tL_YS0Od";
 
-const HEADERS = {
-  "apikey": SUPABASE_KEY,
-  "Authorization": `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation"
-};
+// ==================== AUTENTICACIÓN (Supabase Auth) ====================
+const AUTH_KEY = 'cb_nsg_auth';
+let _session = _readStoredSession();
+let _loginPromise = null;
+
+function _readStoredSession() {
+    try {
+        const s = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+        return s && s.access_token && s.refresh_token ? s : null;
+    } catch (e) { return null; }
+}
+
+function _storeSession(s) {
+    _session = s;
+    try {
+        if (s) localStorage.setItem(AUTH_KEY, JSON.stringify(s));
+        else localStorage.removeItem(AUTH_KEY);
+    } catch (e) { /* almacenamiento bloqueado: la sesión vive solo en memoria */ }
+}
+
+function _sessionFromResponse(r) {
+    return {
+        access_token: r.access_token,
+        refresh_token: r.refresh_token,
+        expires_at: r.expires_at || (Math.floor(Date.now() / 1000) + (r.expires_in || 3600)),
+        email: (r.user && r.user.email) || (_session && _session.email) || ''
+    };
+}
+
+async function _authPost(path, body) {
+    return fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+        method: 'POST',
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+    });
+}
+
+async function authLogin(email, password) {
+    let resp;
+    try {
+        resp = await _authPost('token?grant_type=password', { email, password });
+    } catch (e) {
+        throw new Error('Sin conexión. Revisa tu internet e intenta de nuevo.');
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.access_token) {
+        if (resp.status === 400 || resp.status === 401) throw new Error('Correo o contraseña incorrectos.');
+        if (resp.status === 429) throw new Error('Demasiados intentos. Espera unos minutos.');
+        throw new Error(data.msg || data.error_description || `Error ${resp.status}`);
+    }
+    _storeSession(_sessionFromResponse(data));
+}
+
+// Devuelve 'ok' | 'invalid' (refresh token rechazado) | 'network'
+async function _refreshSession() {
+    if (!_session) return 'invalid';
+    let resp;
+    try {
+        resp = await _authPost('token?grant_type=refresh_token', { refresh_token: _session.refresh_token });
+    } catch (e) { return 'network'; }
+    if (resp.status >= 500) return 'network';
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.access_token) return 'invalid';
+    _storeSession(_sessionFromResponse(data));
+    return 'ok';
+}
+
+function _clearCaches() {
+    try {
+        sessionStorage.removeItem(CACHE_KEY);
+        sessionStorage.removeItem(CACHE_TS);
+        sessionStorage.removeItem('franco_draft');
+    } catch (e) {}
+}
+
+function authLogout() {
+    _storeSession(null);
+    _clearCaches();
+    location.reload();
+}
+
+// Pide credenciales con un modal que no se puede cerrar. Una sola ventana a la vez.
+function ensureLogin() {
+    if (_loginPromise) return _loginPromise;
+    _loginPromise = (async () => {
+        let ok = false;
+        while (!ok) {
+            const r = await Swal.fire({
+                title: 'Iniciar sesión',
+                html: `<div style="font-size:.85rem;color:#666;margin-bottom:10px">Gestión de Chromebooks · acceso restringido</div>
+                       <input id="auth_email" type="email" class="swal2-input" placeholder="Correo" autocomplete="username" value="${_esc((_session && _session.email) || '')}">
+                       <input id="auth_pass" type="password" class="swal2-input" placeholder="Contraseña" autocomplete="current-password">`,
+                confirmButtonText: 'Entrar',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                focusConfirm: false,
+                didOpen: () => {
+                    const pass = document.getElementById('auth_pass');
+                    const mail = document.getElementById('auth_email');
+                    (mail && mail.value ? pass : mail)?.focus();
+                    [mail, pass].forEach(el => el && el.addEventListener('keydown', e => { if (e.key === 'Enter') Swal.clickConfirm(); }));
+                },
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const email = (document.getElementById('auth_email').value || '').trim();
+                    const pass = document.getElementById('auth_pass').value || '';
+                    if (!email || !pass) { Swal.showValidationMessage('Ingresa correo y contraseña'); return false; }
+                    try { await authLogin(email, pass); return true; }
+                    catch (e) { Swal.showValidationMessage(e.message); return false; }
+                }
+            });
+            ok = !!r.value;
+        }
+        document.getElementById('authChip')?.remove();
+        _mountAuthChip();
+    })().finally(() => { _loginPromise = null; });
+    return _loginPromise;
+}
+
+// Token válido para usar ahora. Lanza error si no hay red; devuelve null si hay que volver a iniciar sesión.
+async function _accessToken() {
+    if (!_session) return null;
+    const restante = _session.expires_at - Math.floor(Date.now() / 1000);
+    if (restante > 60) return _session.access_token;
+    const r = await _refreshSession();
+    if (r === 'ok') return _session.access_token;
+    if (r === 'network') throw new Error('Sin conexión con el servidor de autenticación.');
+    _storeSession(null);
+    return null;
+}
+
+// fetch hacia la API REST con la sesión del usuario. Reintenta una vez si el token fue rechazado.
+async function sb(path, options = {}) {
+    for (let intento = 0; intento < 2; intento++) {
+        let token = await _accessToken();
+        if (!token) { await ensureLogin(); token = await _accessToken(); }
+        const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+            ...options,
+            headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+                ...(options.headers || {})
+            }
+        });
+        if (resp.status !== 401) return resp;
+        // 401: token revocado o vencido → intentar renovar; si no, pedir login de nuevo
+        if (await _refreshSession() !== 'ok') _storeSession(null);
+    }
+    throw new Error('La sesión expiró. Vuelve a iniciar sesión.');
+}
+
+// PATCH/DELETE bajo RLS no fallan cuando no tienen permiso: devuelven 0 filas. Se detecta aquí.
+async function _expectRows(response, accion) {
+    const rows = await response.json().catch(() => null);
+    if (Array.isArray(rows) && rows.length === 0) {
+        throw new Error(`No se pudo ${accion}: el registro no existe o tu usuario no tiene permiso.`);
+    }
+    return rows;
+}
+
+function _mountAuthChip() {
+    if (document.getElementById('authChip') || !_session) return;
+    const chip = document.createElement('div');
+    chip.id = 'authChip';
+    chip.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:1030;display:flex;gap:8px;align-items:center;' +
+        'background:rgba(0,51,102,.92);color:#fff;font:12px/1 system-ui,sans-serif;padding:6px 10px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    chip.innerHTML = `<span title="Sesión iniciada">🔒 ${_esc(_session.email || 'Sesión activa')}</span>
+        <button type="button" style="background:#fff;color:#003366;border:0;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer">Salir</button>`;
+    chip.querySelector('button').addEventListener('click', authLogout);
+    document.body.appendChild(chip);
+}
 
 let STOCK_MAXIMO   = 110; 
 let STOCK_REEMPLAZO = 4;
@@ -400,7 +568,7 @@ async function load() {
         const mins = Math.round(cached.age / 60000);
         updateSyncChip('cache', mins || 1);
         
-        fetch(`${SUPABASE_URL}/rest/v1/reservas?select=*&order=id.desc`, { headers: HEADERS })
+        sb('reservas?select=*&order=id.desc')
             .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(data => {
                 if (Array.isArray(data)) {
@@ -414,10 +582,7 @@ async function load() {
     }
 
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/reservas?select=*&order=id.desc`, {
-            method: "GET",
-            headers: HEADERS
-        });
+        const response = await sb('reservas?select=*&order=id.desc');
         
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
@@ -515,15 +680,12 @@ async function saveData() {
     };
 
     try {
-        const url = esEdicion 
-            ? `${SUPABASE_URL}/rest/v1/reservas?id=eq.${idVal}` 
-            : `${SUPABASE_URL}/rest/v1/reservas`;
+        const url = esEdicion ? `reservas?id=eq.${encodeURIComponent(idVal)}` : `reservas`;
             
         const method = esEdicion ? 'PATCH' : 'POST';
 
-        const response = await fetch(url, {
+        const response = await sb(url, {
             method: method,
-            headers: HEADERS,
             body: JSON.stringify(payload)
         });
         
@@ -532,7 +694,7 @@ async function saveData() {
             throw new Error(`Error ${response.status}: ${errText}`);
         }
         
-        const result = await response.json();
+        const result = esEdicion ? await _expectRows(response, 'guardar los cambios') : await response.json();
         
         sessionStorage.removeItem('franco_draft');
         sessionStorage.removeItem(CACHE_KEY);
@@ -596,15 +758,12 @@ async function deleteItem(id) {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.style.display = 'flex';
         try {
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/reservas?id=eq.${id}`, {
-                method: 'DELETE',
-                headers: HEADERS
-            });
-            
+            const response = await sb(`reservas?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errText = await response.text();
                 throw new Error(`Error ${response.status}: ${errText}`);
             }
+            await _expectRows(response, 'eliminar');
             
             sessionStorage.removeItem(CACHE_KEY);
             sessionStorage.removeItem(CACHE_TS);
@@ -704,13 +863,13 @@ async function inlineEdit(id, trEl) {
     if (trEl) trEl.style.background = '#fff9c4';
 
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/reservas?id=eq.${r.id}`, {
+        const response = await sb(`reservas?id=eq.${encodeURIComponent(r.id)}`, {
             method: 'PATCH',
-            headers: HEADERS,
             body: JSON.stringify(payload)
         });
 
         if (response.ok) {
+            await _expectRows(response, 'guardar');
             sessionStorage.removeItem(CACHE_KEY);
             sessionStorage.removeItem(CACHE_TS);
             if (trEl) {
@@ -2604,8 +2763,144 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-window.onload = () => {
+// ==================== SELECTOR PERSONALIZADO (Curso / Docente) ====================
+// El desplegable nativo del navegador se corta cuando el campo queda cerca del borde de la pantalla
+// y no deja llegar al final de la lista. Este selector abre una ventana propia con buscador y scroll.
+function _normTxt(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function _closeSelectPicker() {
+    const ov = document.getElementById('selPickerOverlay');
+    if (ov) { ov._prevFocus && ov._prevFocus.focus && ov._prevFocus.focus(); ov.remove(); }
+}
+
+function _openSelectPicker(sel, titulo) {
+    if (document.getElementById('selPickerOverlay')) return;
+    const dark = document.body.classList.contains('dark-mode');
+    const C = dark
+        ? { bg: '#1f2937', fg: '#e5e7eb', mute: '#9ca3af', line: '#374151', hover: '#2b3748', sel: '#14532d', input: '#111827' }
+        : { bg: '#ffffff', fg: '#1f2937', mute: '#6b7280', line: '#e5e7eb', hover: '#eef4ff', sel: '#dcfce7', input: '#ffffff' };
+
+    // Leer opciones y grupos del <select>
+    const groups = [];
+    let sueltas = { label: '', items: [] };
+    groups.push(sueltas);
+    Array.from(sel.children).forEach(ch => {
+        if (ch.tagName === 'OPTGROUP') {
+            groups.push({ label: ch.label, items: Array.from(ch.children).filter(o => o.value !== '').map(o => ({ value: o.value, text: o.textContent.trim() })) });
+        } else if (ch.tagName === 'OPTION' && ch.value !== '') {
+            sueltas.items.push({ value: ch.value, text: ch.textContent.trim() });
+        }
+    });
+
+    const ov = document.createElement('div');
+    ov.id = 'selPickerOverlay';
+    ov._prevFocus = document.activeElement;
+    ov.style.cssText = 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:12px';
+    ov.innerHTML = `
+        <style>#selPickerOverlay button[data-v]:hover{background:${C.hover}!important}</style>
+        <div role="dialog" aria-label="${_esc(titulo)}" style="background:${C.bg};color:${C.fg};width:min(440px,100%);max-height:min(82vh,640px);display:flex;flex-direction:column;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.4);overflow:hidden;font-family:system-ui,sans-serif">
+            <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid ${C.line}">
+                <strong style="flex:1;font-size:15px">${_esc(titulo)}</strong>
+                <button type="button" data-close aria-label="Cerrar" style="border:0;background:transparent;color:${C.mute};font-size:22px;line-height:1;cursor:pointer">&times;</button>
+            </div>
+            <div style="padding:10px 14px;border-bottom:1px solid ${C.line}">
+                <input type="search" data-q placeholder="Buscar..." autocomplete="off" style="width:100%;padding:9px 12px;font-size:15px;border:1px solid ${C.line};border-radius:8px;background:${C.input};color:${C.fg};outline:none">
+            </div>
+            <div data-list style="overflow-y:auto;overscroll-behavior:contain;padding:6px 8px 10px;flex:1"></div>
+        </div>`;
+
+    const list = ov.querySelector('[data-list]');
+    const q = ov.querySelector('[data-q]');
+
+    const render = () => {
+        const f = _normTxt(q.value.trim());
+        let html = '', total = 0;
+        groups.forEach(g => {
+            const items = g.items.filter(i => !f || _normTxt(i.text).includes(f));
+            if (!items.length) return;
+            total += items.length;
+            if (g.label) html += `<div style="padding:10px 8px 4px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${C.mute}">${_esc(g.label)}</div>`;
+            items.forEach(i => {
+                const activo = i.value === sel.value;
+                html += `<button type="button" data-v="${_esc(i.value)}" style="display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:10px 12px;margin:1px 0;font-size:15px;cursor:pointer;color:${C.fg};background:${activo ? C.sel : 'transparent'}">${activo ? '✓ ' : ''}${_esc(i.text)}</button>`;
+            });
+        });
+        list.innerHTML = total ? html : `<div style="padding:18px;text-align:center;color:${C.mute}">Sin resultados</div>`;
+    };
+
+    const elegir = value => {
+        sel.value = value;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        _closeSelectPicker();
+    };
+
+    list.addEventListener('click', e => {
+        const b = e.target.closest('button[data-v]');
+        if (b) elegir(b.getAttribute('data-v'));
+    });
+    q.addEventListener('input', render);
+    ov.querySelector('[data-close]').addEventListener('click', _closeSelectPicker);
+    ov.addEventListener('mousedown', e => { if (e.target === ov) _closeSelectPicker(); });
+    // Evita que Enter/Escape lleguen al formulario o al modal que está detrás
+    ov.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); _closeSelectPicker(); }
+        else if (e.key === 'Enter') {
+            e.preventDefault();
+            const primero = list.querySelector('button[data-v]');
+            if (primero) elegir(primero.getAttribute('data-v'));
+        }
+    });
+
+    render();
+    // Dentro del modal de Bootstrap para que su "focus trap" no bloquee el buscador
+    (document.getElementById('resModal') || document.body).appendChild(ov);
+    q.focus();
+    const activoBtn = list.querySelector(`button[data-v="${CSS.escape(sel.value)}"]`);
+    if (activoBtn && sel.value) activoBtn.scrollIntoView({ block: 'center' });
+}
+
+// Selectores con buscador (Curso y Docente). Se engancha al documento, así funciona aunque el <select>
+// se cree o se reemplace después de cargar la página. Si el buscador falla, se usa el desplegable normal.
+const _PICKER_TITULOS = { fCurso: 'Seleccione curso', fProfesor: 'Seleccione docente' };
+
+function _pickerTarget(e) {
+    const s = e.target && e.target.closest ? e.target.closest('select') : null;
+    return s && _PICKER_TITULOS[s.id] && !s.dataset.pickerOff ? s : null;
+}
+
+function _initSelectPickers() {
+    if (document._pickersReady) return;
+    document._pickersReady = true;
+    const abrir = (e, s) => {
+        try {
+            _openSelectPicker(s, _PICKER_TITULOS[s.id]);
+            e.preventDefault();
+            s.blur();
+        } catch (err) {
+            console.error('Selector con buscador no disponible, se usa el normal:', err);
+            s.dataset.pickerOff = '1';
+        }
+    };
+    document.addEventListener('mousedown', e => {
+        const s = _pickerTarget(e);
+        if (s && e.button === 0) abrir(e, s);
+    }, true);
+    document.addEventListener('click', e => { if (_pickerTarget(e)) e.preventDefault(); }, true);
+    document.addEventListener('keydown', e => {
+        const s = _pickerTarget(e);
+        if (s && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) abrir(e, s);
+    }, true);
+}
+
+window.onload = async () => {
     _restoreDarkMode();
+    _initSelectPickers();
+    if (!_session) await ensureLogin();
+    else _mountAuthChip();
     load();
     setInterval(() => {
         const chip = document.getElementById('syncChip');
