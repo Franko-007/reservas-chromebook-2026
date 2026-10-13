@@ -84,9 +84,27 @@ function authLogout() {
     location.reload();
 }
 
+// La pantalla de carga (#loading) está en el HTML: se oculta antes del login para no taparlo,
+// y su texto se corrige porque el HTML aún dice "Google Sheets".
+function _hideLoading() {
+    const el = document.getElementById('loading');
+    if (el) el.style.display = 'none';
+}
+
+function _fixLoadingText() {
+    const el = document.getElementById('loading');
+    if (!el || typeof document.createTreeWalker !== 'function') return;
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+        if (/Google Sheets/i.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/Google Sheets/gi, 'Supabase');
+    }
+}
+
 // Pide credenciales con un modal que no se puede cerrar. Una sola ventana a la vez.
 function ensureLogin() {
     if (_loginPromise) return _loginPromise;
+    _hideLoading();
     _loginPromise = (async () => {
         let ok = false;
         while (!ok) {
@@ -2898,6 +2916,7 @@ function _initSelectPickers() {
 
 window.onload = async () => {
     _restoreDarkMode();
+    _fixLoadingText();
     _initSelectPickers();
     if (!_session) await ensureLogin();
     else _mountAuthChip();
